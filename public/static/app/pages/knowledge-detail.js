@@ -22,27 +22,45 @@ function copyText(text, label) {
 }
 
 function renderSqlList(title, items) {
-  const card = h('div', { className: 'card mb-4' },
-    h('h3', { className: 'font-semibold text-gray-900 mb-3' }, title)
+  const card = h('div', { className: 'card mb-4' });
+  const isRunbook = title === 'Runbook';
+
+  const headerLeft = h('div', { className: 'flex items-center gap-3 flex-wrap' },
+    h('h3', { className: 'font-semibold text-gray-900 text-xl' }, title)
   );
 
+  if (isRunbook) {
+    headerLeft.appendChild(h('span', { className: 'text-xs px-3 py-1 rounded-full bg-violet-50 text-violet-600 font-medium' }, 'RockECHO AI 생성'));
+  }
+
+  const copyAllButton = h('button', {
+    className: 'btn-secondary text-sm flex items-center gap-2',
+    onClick: () => copyText(items.map((step) => step.sql || '').join('\n\n'), title)
+  },
+    h('i', { className: 'fas fa-copy' }),
+    `${title} 복사`
+  );
+
+  card.appendChild(h('div', { className: 'flex items-center justify-between gap-3 mb-4' }, headerLeft, copyAllButton));
+
   items.forEach((step, index) => {
-    const block = h('div', { className: 'mb-4 last:mb-0' },
-      h('div', { className: 'flex items-center justify-between mb-2' },
-        h('div', { className: 'flex items-center gap-2' },
-          h('span', { className: 'w-6 h-6 bg-indigo-100 text-indigo-700 rounded-full text-xs flex items-center justify-center font-bold' }, String(step.step || index + 1)),
-          h('span', { className: 'text-sm font-medium text-gray-800' }, step.title || `Step ${index + 1}`)
-        ),
-        h('button', {
-          className: 'copy-btn',
-          onClick: () => copyText(step.sql || '', 'SQL')
-        }, h('i', { className: 'fas fa-copy mr-1' }), 'Copy SQL')
-      ),
-      h('div', { className: 'code-block' },
-        h('pre', { className: 'text-sm whitespace-pre-wrap' }, step.sql || '-- no SQL')
-      )
+    const stepBlock = h('div', { className: 'mb-5 last:mb-0' });
+    const rowHeader = h('div', { className: 'flex items-center gap-3 mb-2' },
+      h('span', { className: 'w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 text-sm font-bold flex items-center justify-center' }, String(step.step || index + 1)),
+      h('span', { className: 'text-lg font-medium text-gray-900' }, step.title || `Step ${index + 1}`)
     );
-    card.appendChild(block);
+
+    const codeWrap = h('div', { className: 'code-block' },
+      h('button', {
+        className: 'copy-btn',
+        onClick: () => copyText(step.sql || '', `${title} SQL`)
+      }, h('i', { className: 'fas fa-copy mr-1' }), '복사'),
+      h('pre', { className: 'text-sm whitespace-pre-wrap' }, step.sql || '-- no SQL')
+    );
+
+    stepBlock.appendChild(rowHeader);
+    stepBlock.appendChild(codeWrap);
+    card.appendChild(stepBlock);
   });
 
   return card;
@@ -156,43 +174,87 @@ export async function renderKnowledgeDetail(id, searchEventId, index, total) {
       left.appendChild(renderSqlList('Diagnostic Steps', entry.diagnostic_steps));
     }
 
-    const feedbackCard = h('div', { className: 'card mb-4' },
-      h('h3', { className: 'font-semibold text-gray-900 mb-3' }, 'Feedback')
-    );
     const resultRank = typeof index === 'number' ? index + 1 : null;
-    const feedbackRow = h('div', { className: 'flex items-center gap-3 flex-wrap' },
-      h('button', {
-        className: 'flex items-center gap-2 px-4 py-2 border border-green-200 rounded-lg text-green-700 hover:bg-green-50 transition-all',
-        onClick: async () => {
-          await submitFeedback(id, 'helpful', searchEventId, resultRank);
-          showNotification('Helpful feedback saved', 'success');
-        }
-      }, h('i', { className: 'fas fa-thumbs-up' }), `Helpful (${entry.helpful_count || 0})`),
-      h('button', {
-        className: 'flex items-center gap-2 px-4 py-2 border border-red-200 rounded-lg text-red-700 hover:bg-red-50 transition-all',
-        onClick: async () => {
-          await submitFeedback(id, 'not_helpful', searchEventId, resultRank);
-          showNotification('Negative feedback saved', 'info');
-        }
-      }, h('i', { className: 'fas fa-thumbs-down' }), `Not helpful (${entry.not_helpful_count || 0})`)
+    let helpfulCount = Number(entry.helpful_count || 0);
+    let notHelpfulCount = Number(entry.not_helpful_count || 0);
+    let selectedFeedback = null;
+
+    const feedbackCard = h('div', { className: 'card mb-4' },
+      h('div', { className: 'flex items-center gap-2 mb-4' },
+        h('i', { className: 'fas fa-comment-dots text-sm text-violet-400' }),
+        h('h3', { className: 'font-semibold text-gray-900' }, '피드백')
+      )
     );
+
+    const helpfulCountLabel = h('span', { className: 'font-semibold' }, helpfulCount);
+    const notHelpfulCountLabel = h('span', { className: 'font-semibold' }, notHelpfulCount);
+
+    const helpfulButton = h('button', {
+      onClick: async () => {
+        await applyFeedback('helpful');
+        showNotification('도움됨 피드백을 저장했습니다', 'success');
+      }
+    },
+      h('i', { className: 'fas fa-thumbs-up' }),
+      h('span', {}, '도움됨'),
+      helpfulCountLabel
+    );
+
+    const notHelpfulButton = h('button', {
+      onClick: async () => {
+        await applyFeedback('not_helpful');
+        showNotification('도움 안됨 피드백을 저장했습니다', 'info');
+      }
+    },
+      h('i', { className: 'fas fa-thumbs-down' }),
+      h('span', {}, '도움 안됨'),
+      notHelpfulCountLabel
+    );
+
+    function updateFeedbackButtons() {
+      helpfulButton.className = `flex items-center gap-2 px-5 py-3 rounded-xl border text-sm font-semibold transition-all ${selectedFeedback === 'helpful' ? 'border-green-300 bg-green-50 text-green-700' : 'border-green-200 bg-white text-green-700 hover:bg-green-50'}`;
+      notHelpfulButton.className = `flex items-center gap-2 px-5 py-3 rounded-xl border text-sm font-semibold transition-all ${selectedFeedback === 'not_helpful' ? 'border-red-300 bg-red-50 text-red-700' : 'border-red-200 bg-white text-red-700 hover:bg-red-50'}`;
+    }
+
+    async function applyFeedback(type, suggestion = null) {
+      await submitFeedback(id, type, searchEventId, resultRank, suggestion);
+      if (type === 'helpful') {
+        helpfulCount += 1;
+        helpfulCountLabel.textContent = String(helpfulCount);
+      } else {
+        notHelpfulCount += 1;
+        notHelpfulCountLabel.textContent = String(notHelpfulCount);
+      }
+      selectedFeedback = type;
+      updateFeedbackButtons();
+    }
+
+    updateFeedbackButtons();
+
+    const feedbackRow = h('div', { className: 'flex items-center gap-3 flex-wrap' }, helpfulButton, notHelpfulButton);
     feedbackCard.appendChild(feedbackRow);
+
     const suggestionInput = h('input', {
       type: 'text',
       className: 'input-field text-sm mt-3',
-      placeholder: 'Optional suggestion for improving this knowledge'
+      placeholder: '개선 제안이 있으면 입력해주세요 (선택)'
     });
     feedbackCard.appendChild(suggestionInput);
     feedbackCard.appendChild(h('button', {
-      className: 'mt-2 btn-secondary text-sm',
+      className: 'mt-3 btn-secondary text-sm',
       onClick: async () => {
         const suggestion = suggestionInput.value.trim();
-        if (!suggestion) return;
-        await submitFeedback(id, 'helpful', searchEventId, resultRank, suggestion);
+        if (!suggestion) {
+          showNotification('개선 제안을 입력해 주세요', 'warning');
+          return;
+        }
+        const feedbackType = selectedFeedback || 'helpful';
+        await applyFeedback(feedbackType, suggestion);
         suggestionInput.value = '';
-        showNotification('Suggestion saved', 'success');
+        showNotification('제안을 제출했습니다', 'success');
       }
-    }, 'Submit suggestion'));
+    }, '제안 제출'));
+
     left.appendChild(feedbackCard);
 
     const metaCard = h('div', { className: 'card mb-4' },

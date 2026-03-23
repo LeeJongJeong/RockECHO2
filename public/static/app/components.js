@@ -3,69 +3,66 @@ import { h } from './utils.js';
 import { navigate } from './router.js';
 
 export function renderSidebar(onUserChange) {
-  const sidebar = h('div', { className: 'w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0' });
+  const sidebar = h('div', { className: 'w-64 bg-white border-r border-slate-200 flex flex-col flex-shrink-0' });
 
-  sidebar.appendChild(h('div', { className: 'sidebar-logo' },
-    h('div', { className: 'flex items-center gap-2' },
-      h('div', { className: 'w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center' },
+  sidebar.appendChild(h('div', { className: 'px-5 pt-5 pb-4 border-b border-slate-200' },
+    h('div', { className: 'flex items-center gap-3' },
+      h('div', { className: 'w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm' },
         h('i', { className: 'fas fa-mountain text-white text-sm' })
       ),
       h('div', {},
-        h('h1', { className: 'text-lg font-bold text-gray-900 tracking-tight' }, 'RockECHO')
+        h('h1', { className: 'text-[17px] font-extrabold text-slate-900 tracking-tight' }, 'RockECHO')
       )
     ),
-    h('p', { className: 'text-xs text-gray-400 mt-2 leading-relaxed' }, 'Capture incidents and echo operational knowledge back to the team.')
+    h('p', { className: 'mt-3 text-[13px] leading-5 text-slate-400' }, '과거의 경험이 메아리처럼 돌아옵니다')
   ));
 
-  sidebar.appendChild(h('div', { className: 'p-3' },
+  sidebar.appendChild(h('div', { className: 'px-3 pt-4 pb-3' },
     h('button', {
-      className: 'btn-primary w-full flex items-center justify-center gap-2 text-sm',
+      className: 'w-full h-11 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[15px] font-semibold shadow-sm transition-all hover:from-indigo-700 hover:to-violet-700 flex items-center justify-center gap-2',
       onClick: () => navigate('quick-input')
     },
-      h('i', { className: 'fas fa-plus' }),
-      'Quick Input'
+      h('i', { className: 'fas fa-plus text-sm' }),
+      '장애 기록하기'
     )
   ));
 
-  const nav = h('nav', { className: 'flex-1 px-3 space-y-1' });
+  const nav = h('nav', { className: 'flex-1 px-3 pb-4 space-y-1.5' });
   const navItems = [
-    { id: 'dashboard', icon: 'fa-tachometer-alt', label: 'Dashboard' },
-    { id: 'search', icon: 'fa-search', label: 'Search' },
-    { id: 'quick-input', icon: 'fa-plus-circle', label: 'Quick Input' },
+    { id: 'dashboard', icon: 'fa-gauge-high', label: '대시보드' },
+    { id: 'search', icon: 'fa-magnifying-glass', label: '장애 검색' },
+    { id: 'quick-input', icon: 'fa-circle-plus', label: '장애 기록' },
     { id: 'reviewer', icon: 'fa-check-double', label: 'Reviewer' },
-    { id: 'zero-results', icon: 'fa-exclamation-circle', label: 'Zero Results' },
-    { id: 'audit-log', icon: 'fa-history', label: 'Audit Log' }
+    { id: 'zero-results', icon: 'fa-circle-exclamation', label: 'Zero Result 분석' },
+    { id: 'audit-log', icon: 'fa-arrow-rotate-left', label: '감사 로그' }
   ];
 
   for (const item of navItems) {
+    const active = getCurrentPage() === item.id;
     const navItem = h('a', {
       href: '#',
-      className: `sidebar-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 cursor-pointer transition-all ${getCurrentPage() === item.id ? 'active' : ''}`,
+      className: `flex items-center gap-3 rounded-lg px-4 py-3 text-[15px] font-semibold transition-colors ${active ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`,
       onClick: (event) => {
         event.preventDefault();
         navigate(item.id);
       }
     },
-      h('i', { className: `fas ${item.icon} w-4 text-center` }),
-      item.label
+      h('span', { className: `flex w-5 items-center justify-center text-[15px] ${active ? 'text-slate-600' : 'text-slate-500'}` },
+        h('i', { className: `fas ${item.icon}` })
+      ),
+      h('span', {}, item.label)
     );
     nav.appendChild(navItem);
   }
   sidebar.appendChild(nav);
 
-  sidebar.appendChild(h('div', { className: 'p-4 border-t border-gray-200' },
-    h('div', { className: 'flex items-center gap-3' },
-      h('div', { className: 'w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center' },
-        h('i', { className: 'fas fa-user text-indigo-600 text-sm' })
-      ),
-      h('div', {},
-        h('p', { className: 'text-sm font-medium text-gray-800' }, CURRENT_USER.name),
-        h('p', { className: 'text-xs text-gray-400' }, CURRENT_USER.role)
-      )
-    ),
+  sidebar.appendChild(h('div', { className: 'mt-auto px-4 py-4 border-t border-slate-200' },
+    h('p', { className: 'text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2' }, 'Role'),
+    h('p', { className: 'text-sm font-semibold text-slate-800' }, CURRENT_USER.name),
+    h('p', { className: 'text-xs text-slate-400 mt-0.5' }, CURRENT_USER.role),
     h('div', { className: 'mt-3' },
       h('select', {
-        className: 'text-xs border border-gray-200 rounded px-2 py-1 w-full text-gray-600',
+        className: 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 outline-none focus:border-indigo-400',
         value: CURRENT_USER.role,
         onChange: (event) => {
           const roles = { engineer: 'user-004', senior_engineer: 'user-002', reviewer: 'user-003', admin: 'user-001' };

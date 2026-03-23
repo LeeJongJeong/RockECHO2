@@ -1,16 +1,37 @@
 import { api } from '../api.js';
-import { CURRENT_USER, DBMS_LABELS, PRIORITY_COLORS } from '../state.js';
+import { CURRENT_USER, DBMS_LABELS } from '../state.js';
 import { h, showNotification } from '../utils.js';
 import { navigate } from '../router.js';
 
+const STEP_LABELS = ['Raw Input', 'AI 초안 생성', '검토+수정', 'Reviewer 승인', '완료'];
+
 const PRIORITY_OPTIONS = {
-  p1: { label: 'P1', description: 'Service impact' },
-  p2: { label: 'P2', description: 'Performance or error risk' },
-  p3: { label: 'P3', description: 'Warning or investigation' }
+  p1: {
+    label: 'P1',
+    description: '서비스 중단',
+    activeClass: 'border-red-400 bg-red-50 text-red-600'
+  },
+  p2: {
+    label: 'P2',
+    description: '성능 저하',
+    activeClass: 'border-amber-400 bg-amber-50 text-amber-600'
+  },
+  p3: {
+    label: 'P3',
+    description: '경고 수준',
+    activeClass: 'border-slate-400 bg-slate-50 text-slate-700'
+  }
 };
 
 function parseTags(value) {
   return value.split(',').map((tag) => tag.trim()).filter(Boolean);
+}
+
+function fieldLabel(title, hint = '') {
+  return h('div', { className: 'mb-2' },
+    h('span', { className: 'text-sm font-medium text-gray-800' }, title),
+    hint ? h('span', { className: 'text-xs text-gray-400 ml-2' }, hint) : null
+  );
 }
 
 export function renderQuickInput(prefill = '') {
@@ -22,33 +43,36 @@ export function renderQuickInput(prefill = '') {
   let createdIncidentId = null;
   let knowledgeEntry = null;
 
-  const container = h('div', { className: 'p-6 max-w-4xl' });
-  const stepIndicator = h('div', { className: 'mb-6' });
+  const container = h('div', { className: 'p-6 max-w-5xl' });
+  const stepIndicator = h('div', { className: 'mb-8' });
   const content = h('div', { id: 'step-content' });
 
   container.appendChild(h('div', { className: 'mb-6' },
-    h('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Quick Input'),
-    h('p', { className: 'text-sm text-gray-400 mt-1' }, 'Capture a raw incident, generate an AI draft, refine it, and hand it to review.')
+    h('h1', { className: 'text-2xl font-bold text-gray-900' }, '장애 기록하기'),
+    h('p', { className: 'text-sm text-gray-400 mt-1' }, 'RockECHO AI가 구조화를 도와드립니다 — 최소 입력으로 지식을 축적하세요')
   ));
   container.appendChild(stepIndicator);
   container.appendChild(content);
   main.appendChild(container);
 
   function renderStepIndicator() {
-    const labels = ['Raw Input', 'AI Draft', 'Edit Draft', 'Review Queue', 'Complete'];
     stepIndicator.innerHTML = '';
     const wrap = h('div', { className: 'step-indicator' });
-    labels.forEach((label, index) => {
+
+    STEP_LABELS.forEach((label, index) => {
       const stepNumber = index + 1;
       const status = stepNumber < currentStep ? 'step-done' : stepNumber === currentStep ? 'step-active' : 'step-pending';
+
       wrap.appendChild(h('div', { className: `step-item ${status}` },
         h('div', { className: 'step-circle' }, stepNumber < currentStep ? h('i', { className: 'fas fa-check' }) : String(stepNumber)),
-        h('p', { className: `text-xs mt-1 font-medium ${stepNumber === currentStep ? 'text-indigo-600' : stepNumber < currentStep ? 'text-green-600' : 'text-gray-400'}` }, label)
+        h('p', { className: `text-xs mt-2 font-medium ${stepNumber === currentStep ? 'text-indigo-600' : stepNumber < currentStep ? 'text-green-600' : 'text-gray-400'}` }, label)
       ));
-      if (stepNumber < labels.length) {
-        wrap.appendChild(h('div', { className: `step-line ${stepNumber < currentStep ? 'step-done' : 'step-pending'}`, style: 'height:2px; flex:1; margin-bottom:16px' }));
+
+      if (stepNumber < STEP_LABELS.length) {
+        wrap.appendChild(h('div', { className: `step-line ${stepNumber < currentStep ? 'step-done' : 'step-pending'}`, style: 'height:2px; flex:1; margin-bottom:18px' }));
       }
     });
+
     stepIndicator.appendChild(wrap);
   }
 
@@ -64,13 +88,14 @@ export function renderQuickInput(prefill = '') {
 
   function renderStepOne() {
     const card = h('div', { className: 'card' });
-    card.appendChild(h('h2', { className: 'font-semibold text-gray-900 mb-4' }, 'Describe the incident'));
+    card.appendChild(h('h2', { className: 'text-xl font-semibold text-gray-900 mb-6' }, '① DBMS 선택 및 장애 내용 입력'));
 
-    card.appendChild(h('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'DBMS *'));
-    const dbmsGrid = h('div', { className: 'grid grid-cols-4 gap-2 mb-4' });
+    card.appendChild(fieldLabel('DBMS 선택 *'));
+    const dbmsGrid = h('div', { className: 'grid grid-cols-4 gap-2 mb-5' });
     Object.entries(DBMS_LABELS).forEach(([value, label]) => {
+      const active = incidentData.dbms === value;
       dbmsGrid.appendChild(h('button', {
-        className: `p-2 border-2 rounded-lg text-xs font-medium transition-all text-center ${incidentData.dbms === value ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:border-indigo-200'}`,
+        className: `h-10 border rounded-lg text-sm font-medium transition-all ${active ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-700 hover:border-indigo-200 hover:text-indigo-600'}`,
         onClick: () => {
           incidentData.dbms = value;
           renderStep();
@@ -79,27 +104,28 @@ export function renderQuickInput(prefill = '') {
     });
     card.appendChild(dbmsGrid);
 
-    card.appendChild(h('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'Priority'));
-    const priorityRow = h('div', { className: 'flex gap-2 mb-4' });
+    card.appendChild(fieldLabel('우선순위'));
+    const priorityRow = h('div', { className: 'grid grid-cols-3 gap-3 mb-5' });
     Object.entries(PRIORITY_OPTIONS).forEach(([value, option]) => {
+      const active = incidentData.priority === value;
       priorityRow.appendChild(h('button', {
-        className: `flex-1 p-2 border-2 rounded-lg transition-all ${incidentData.priority === value ? `border-current ${PRIORITY_COLORS[value]}` : 'border-gray-200 text-gray-600'}`,
+        className: `rounded-xl border-2 px-4 py-3 transition-all text-center ${active ? option.activeClass : 'border-gray-200 text-gray-600 hover:border-gray-300'}`,
         onClick: () => {
           incidentData.priority = value;
           renderStep();
         }
       },
-        h('div', { className: 'text-sm font-bold' }, option.label),
-        h('div', { className: 'text-xs' }, option.description)
+        h('div', { className: 'text-xl font-bold leading-none' }, option.label),
+        h('div', { className: 'text-sm mt-1' }, option.description)
       ));
     });
     card.appendChild(priorityRow);
 
-    card.appendChild(h('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'DBMS Version'));
+    card.appendChild(fieldLabel('DBMS 버전 (선택)'));
     const versionInput = h('input', {
       type: 'text',
-      className: 'input-field mb-4',
-      placeholder: 'PostgreSQL 15.2, MySQL 8.0.32, MongoDB 7.0...',
+      className: 'input-field mb-5',
+      placeholder: '예: PostgreSQL 15.2, MySQL 8.0.32',
       value: incidentData.dbms_version
     });
     versionInput.addEventListener('input', (event) => {
@@ -107,11 +133,16 @@ export function renderQuickInput(prefill = '') {
     });
     card.appendChild(versionInput);
 
-    card.appendChild(h('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'Raw input *'));
+    card.appendChild(fieldLabel('장애 내용 입력 *', '에러 로그, SQL, 증상 무엇이든'));
+    card.appendChild(h('div', { className: 'mb-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 flex items-start gap-2' },
+      h('i', { className: 'fas fa-lightbulb mt-0.5 text-xs' }),
+      h('span', {}, '에러 로그, SQL 결과, 조치 내용 등 raw 텍스트 자유 입력. RockECHO AI가 구조화합니다.')
+    ));
+
     const rawInput = h('textarea', {
       className: 'input-field',
-      rows: '10',
-      placeholder: 'Paste logs, SQL, metrics, or a short description of what happened.'
+      rows: '9',
+      placeholder: '예시:\npg_stat_user_tables에서 n_dead_tup이 5,234,891건 발생\nautovacuum: found orphan temp table "pg_temp_3"."tt_work_123" in database\nlast_autovacuum: 2025-03-01 (3일 전)\nVACUUM VERBOSE 실행 후 해결됨'
     });
     rawInput.value = incidentData.raw_input;
     rawInput.addEventListener('input', (event) => {
@@ -119,17 +150,17 @@ export function renderQuickInput(prefill = '') {
     });
     card.appendChild(rawInput);
 
-    card.appendChild(h('div', { className: 'flex justify-end gap-3 mt-4' },
-      h('button', { className: 'btn-secondary', onClick: () => navigate('dashboard') }, 'Cancel'),
+    card.appendChild(h('div', { className: 'flex justify-end gap-3 mt-6' },
+      h('button', { className: 'btn-secondary', onClick: () => navigate('dashboard') }, '취소'),
       h('button', {
         className: 'btn-primary flex items-center gap-2',
         onClick: async () => {
           if (!incidentData.dbms) {
-            showNotification('Select a DBMS first', 'error');
+            showNotification('DBMS를 먼저 선택해 주세요', 'error');
             return;
           }
           if (!incidentData.raw_input.trim()) {
-            showNotification('Enter raw incident details', 'error');
+            showNotification('장애 내용을 입력해 주세요', 'error');
             return;
           }
 
@@ -149,7 +180,10 @@ export function renderQuickInput(prefill = '') {
             showNotification(error.message, 'error');
           }
         }
-      }, h('i', { className: 'fas fa-arrow-right' }), 'Generate AI draft')
+      },
+        h('i', { className: 'fas fa-arrow-right' }),
+        'AI 초안 생성'
+      )
     ));
 
     content.appendChild(card);
@@ -160,8 +194,8 @@ export function renderQuickInput(prefill = '') {
       h('div', { className: 'w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4' },
         h('i', { className: 'fas fa-robot text-purple-600 text-2xl fa-spin' })
       ),
-      h('h2', { className: 'text-lg font-semibold text-gray-900 mb-2' }, 'Generating AI draft'),
-      h('p', { className: 'text-sm text-gray-400' }, 'The draft will be stored as ai_generated and can be refined before review.')
+      h('h2', { className: 'text-lg font-semibold text-gray-900 mb-2' }, 'AI 초안을 생성하는 중입니다'),
+      h('p', { className: 'text-sm text-gray-400' }, '입력한 장애 내용을 구조화해서 검토 가능한 초안으로 정리합니다.')
     );
     content.appendChild(card);
 
@@ -178,8 +212,8 @@ export function renderQuickInput(prefill = '') {
       card.innerHTML = '';
       card.appendChild(h('div', { className: 'text-center py-8' },
         h('i', { className: 'fas fa-exclamation-triangle text-red-500 text-3xl mb-3' }),
-        h('p', { className: 'text-red-600' }, `AI generation failed: ${error.message}`),
-        h('button', { className: 'btn-primary mt-3', onClick: renderStepTwo }, 'Retry')
+        h('p', { className: 'text-red-600' }, `AI 초안 생성에 실패했습니다: ${error.message}`),
+        h('button', { className: 'btn-primary mt-3', onClick: renderStepTwo }, '다시 시도')
       ));
     }
   }
@@ -187,17 +221,17 @@ export function renderQuickInput(prefill = '') {
   function renderStepThree() {
     if (!knowledgeEntry) return;
     const card = h('div', { className: 'card' });
-    card.appendChild(h('div', { className: 'mb-4' },
-      h('h2', { className: 'font-semibold text-gray-900' }, 'Refine the draft'),
-      h('p', { className: 'text-xs text-gray-400 mt-1' }, `${incidentData.incident_number || '-'} - AI quality ${Math.round((knowledgeEntry.ai_quality_score || 0.6) * 100)}%`)
+    card.appendChild(h('div', { className: 'mb-5' },
+      h('h2', { className: 'text-xl font-semibold text-gray-900' }, '③ AI 초안 검토 및 수정'),
+      h('p', { className: 'text-xs text-gray-400 mt-1' }, `${incidentData.incident_number || '-'} · AI 품질 ${Math.round((knowledgeEntry.ai_quality_score || 0.6) * 100)}%`)
     ));
 
     const fields = [
-      ['title', 'Title', 'input'],
-      ['symptom', 'Symptom', 'textarea'],
-      ['cause', 'Cause', 'textarea'],
-      ['action', 'Action', 'textarea'],
-      ['version_range', 'Version Range', 'input']
+      ['title', '제목', 'input'],
+      ['symptom', '증상', 'textarea'],
+      ['cause', '원인', 'textarea'],
+      ['action', '조치', 'textarea'],
+      ['version_range', '적용 버전 범위', 'input']
     ];
 
     fields.forEach(([key, label, type]) => {
@@ -214,7 +248,7 @@ export function renderQuickInput(prefill = '') {
       card.appendChild(element);
     });
 
-    card.appendChild(h('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Tags (comma separated)'));
+    card.appendChild(h('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, '태그 (쉼표로 구분)'));
     const tagsInput = h('input', {
       type: 'text',
       className: 'input-field mb-4',
@@ -243,27 +277,27 @@ export function renderQuickInput(prefill = '') {
       className: 'btn-secondary text-sm',
       onClick: async () => {
         await persistDraft('ai_generated');
-        showNotification('Draft saved', 'success');
+        showNotification('초안을 저장했습니다', 'success');
         navigate('dashboard');
       }
-    }, 'Save draft'));
+    }, '임시 저장'));
 
     actions.appendChild(h('button', {
       className: 'btn-primary text-sm flex items-center gap-2',
       onClick: async () => {
         await persistDraft('reviewed');
-        showNotification('Submitted to reviewer queue', 'success');
+        showNotification('Reviewer 검토 대기로 전달했습니다', 'success');
         currentStep = 4;
         renderStep();
       }
-    }, h('i', { className: 'fas fa-paper-plane' }), 'Submit for review'));
+    }, h('i', { className: 'fas fa-paper-plane' }), 'Reviewer에 전달'));
 
     if (['senior_engineer', 'reviewer', 'admin'].includes(CURRENT_USER.role)) {
       actions.appendChild(h('button', {
         className: 'btn-success text-sm flex items-center gap-2',
         onClick: async () => {
           if (!knowledgeEntry.version_range) {
-            showNotification('Version range is required before approval', 'error');
+            showNotification('승인 전에는 적용 버전 범위가 필요합니다', 'error');
             return;
           }
           await api('PATCH', `/api/knowledge/${knowledgeEntry.id}`, {
@@ -277,11 +311,11 @@ export function renderQuickInput(prefill = '') {
             user_id: CURRENT_USER.id
           });
           await api('POST', `/api/knowledge/${knowledgeEntry.id}/approve`, { user_id: CURRENT_USER.id });
-          showNotification('Approved directly', 'success');
+          showNotification('즉시 승인 처리했습니다', 'success');
           currentStep = 5;
           renderStep();
         }
-      }, h('i', { className: 'fas fa-check-double' }), 'Approve now'));
+      }, h('i', { className: 'fas fa-check-double' }), '즉시 승인'));
     }
 
     card.appendChild(actions);
@@ -293,9 +327,9 @@ export function renderQuickInput(prefill = '') {
       h('div', { className: 'w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4' },
         h('i', { className: 'fas fa-clock text-blue-600 text-2xl' })
       ),
-      h('h2', { className: 'text-lg font-semibold text-gray-900 mb-2' }, 'Waiting for reviewer'),
-      h('p', { className: 'text-sm text-gray-500 mb-4' }, 'The draft is now in the review queue and can be approved or rejected there.'),
-      h('button', { className: 'btn-primary', onClick: () => navigate('reviewer') }, 'Open reviewer dashboard')
+      h('h2', { className: 'text-lg font-semibold text-gray-900 mb-2' }, 'Reviewer 승인 대기'),
+      h('p', { className: 'text-sm text-gray-500 mb-4' }, '초안이 Reviewer 큐에 등록되었습니다. 승인 또는 반려는 Reviewer 메뉴에서 처리할 수 있습니다.'),
+      h('button', { className: 'btn-primary', onClick: () => navigate('reviewer') }, 'Reviewer 화면 열기')
     );
     content.appendChild(card);
   }
@@ -305,11 +339,11 @@ export function renderQuickInput(prefill = '') {
       h('div', { className: 'w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4' },
         h('i', { className: 'fas fa-check-circle text-green-600 text-2xl' })
       ),
-      h('h2', { className: 'text-lg font-semibold text-gray-900 mb-2' }, 'Knowledge published'),
-      h('p', { className: 'text-sm text-gray-500 mb-4' }, 'This incident is now stored as reusable operational knowledge.'),
+      h('h2', { className: 'text-lg font-semibold text-gray-900 mb-2' }, '완료'),
+      h('p', { className: 'text-sm text-gray-500 mb-4' }, '이번 장애 내용이 재사용 가능한 운영 지식으로 저장되었습니다.'),
       h('div', { className: 'flex gap-3 justify-center' },
-        h('button', { className: 'btn-secondary', onClick: () => navigate('dashboard') }, 'Dashboard'),
-        h('button', { className: 'btn-primary', onClick: () => navigate('search') }, 'Search knowledge')
+        h('button', { className: 'btn-secondary', onClick: () => navigate('dashboard') }, '대시보드'),
+        h('button', { className: 'btn-primary', onClick: () => navigate('search') }, '장애 검색으로 이동')
       )
     );
     content.appendChild(card);
