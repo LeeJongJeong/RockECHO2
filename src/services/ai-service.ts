@@ -5,21 +5,49 @@ import { generateFallback } from '../ai/fallback'
 import { parseKnowledgeJsonFields, toJsonString } from '../lib/json'
 import { createActivityLog } from '../repositories/activity-repository'
 import { getKnowledgeEntryById, insertKnowledgeEntry } from '../repositories/knowledge-repository'
+import { generateEmbedding } from '../ai/embedding'
 
 export async function generateKnowledgeDraft(
   db: D1Database,
-  env: Pick<Bindings, 'OPENAI_API_KEY' | 'OPENAI_BASE_URL'>,
+  env: Pick<Bindings, 'OPENAI_API_KEY' | 'OPENAI_BASE_URL' | 'VECTOR_DB' | 'DB'>,
   input: {
     incidentId: string
     rawInput: string
     dbms: string
     userId?: string
+    aiModel?: string
+    embeddingModel?: string
   }
 ) {
   const apiKey = env.OPENAI_API_KEY
   const baseUrl = env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
+  let contextInfo = ''
+
+  if (apiKey && env.VECTOR_DB) {
+    try {
+      const textToEmbed = `Raw Input: ${input.rawInput}`
+      const embedding = await generateEmbedding(apiKey, baseUrl, textToEmbed, input.embeddingModel)
+      const matches = await env.VECTOR_DB.query(embedding, {
+        topK: 2,
+        filter: { dbms: input.dbms }
+      })
+
+      if (matches.matches.length > 0) {
+        const ids = matches.matches.map(m => String(m.id))
+        const entries = await Promise.all(ids.map(id => getKnowledgeEntryById(db, id)))
+        
+        contextInfo = entries
+          .filter(Boolean)
+          .map((entry: any, idx) => `[Past Reference ${idx + 1}]\nTitle: ${entry.title}\nSymptom: ${entry.symptom}\nCause: ${entry.cause}\nAction: ${entry.action}\nRunbook: ${entry.runbook}`)
+          .join('\n\n')
+      }
+    } catch (err) {
+      console.warn('RAG retrieval failed, proceeding without context', err)
+    }
+  }
+
   const knowledge: Partial<KnowledgeEntry> = apiKey
-    ? await generateWithOpenAI(apiKey, baseUrl, input.rawInput, input.dbms)
+    ? await generateWithOpenAI(apiKey, baseUrl, input.rawInput, input.dbms, contextInfo, input.aiModel)
     : generateFallback(input.rawInput, input.dbms)
 
   const id = uuidv4()

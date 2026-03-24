@@ -34,7 +34,8 @@ export function renderSidebar(onUserChange) {
     { id: 'quick-input', icon: 'fa-circle-plus', label: '장애 기록' },
     { id: 'reviewer', icon: 'fa-check-double', label: 'Reviewer' },
     { id: 'zero-results', icon: 'fa-circle-exclamation', label: 'Zero Result 분석' },
-    { id: 'audit-log', icon: 'fa-arrow-rotate-left', label: '감사 로그' }
+    { id: 'audit-log', icon: 'fa-arrow-rotate-left', label: '감사 로그' },
+    { id: 'settings', icon: 'fa-gear', label: '설정' }
   ];
 
   for (const item of navItems) {

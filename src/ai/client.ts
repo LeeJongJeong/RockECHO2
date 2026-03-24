@@ -32,8 +32,11 @@ export async function generateWithOpenAI(
   apiKey: string,
   baseUrl: string,
   rawInput: string,
-  dbms: string
+  dbms: string,
+  contextInfo = '',
+  modelName = ''
 ): Promise<Partial<KnowledgeEntry>> {
+    const model = modelName || 'gpt-4o-mini';
     let response: Response;
     try {
       response = await fetchWithRetry(`${baseUrl}/chat/completions`, {
@@ -43,10 +46,10 @@ export async function generateWithOpenAI(
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model,
           messages: [
             { role: 'system', content: buildSystemPrompt(dbms) },
-            { role: 'user', content: buildUserPrompt(rawInput, dbms) }
+            { role: 'user', content: buildUserPrompt(rawInput, dbms, contextInfo) }
           ],
           temperature: 0.2,
           max_tokens: 4000,

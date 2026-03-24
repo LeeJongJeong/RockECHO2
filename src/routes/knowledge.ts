@@ -14,6 +14,14 @@ import {
 
 const knowledgeRoutes = new Hono<{ Bindings: Bindings }>()
 
+function getAiEnv(c: any) {
+  const overrideEnv = { ...c.env }
+  if (c.req.header('X-AI-Base-Url')) overrideEnv.OPENAI_BASE_URL = c.req.header('X-AI-Base-Url')
+  if (c.req.header('X-AI-Api-Key')) overrideEnv.OPENAI_API_KEY = c.req.header('X-AI-Api-Key')
+  const embeddingModel = c.req.header('X-Embedding-Model') || ''
+  return { env: overrideEnv, embeddingModel }
+}
+
 knowledgeRoutes.get('/', async (c) => {
   return c.json(await listKnowledgeSummaries(c.env.DB, c.req.query()))
 })
@@ -27,13 +35,15 @@ knowledgeRoutes.get('/:id', async (c) => {
 })
 
 knowledgeRoutes.patch('/:id', async (c) => {
-  const updated = await updateKnowledgeFields(c.env.DB, c.req.param('id'), await c.req.json())
+  const { env, embeddingModel } = getAiEnv(c)
+  const updated = await updateKnowledgeFields(env, c.req.param('id'), await c.req.json(), embeddingModel)
   return c.json(updated)
 })
 
 knowledgeRoutes.post('/:id/approve', async (c) => {
   const { user_id = 'user-003' } = await c.req.json().catch(() => ({}))
-  const result = await approveKnowledgeEntry(c.env.DB, c.req.param('id'), user_id)
+  const { env, embeddingModel } = getAiEnv(c)
+  const result = await approveKnowledgeEntry(env, c.req.param('id'), user_id, embeddingModel)
   return c.json(result)
 })
 
@@ -58,7 +68,8 @@ knowledgeRoutes.post('/bulk-approve', async (c) => {
   if (!Array.isArray(ids) || ids.length === 0) {
     throw new AppError('ids array required', 400)
   }
-  return c.json(await bulkApproveKnowledgeEntries(c.env.DB, ids, user_id))
+  const { env, embeddingModel } = getAiEnv(c)
+  return c.json(await bulkApproveKnowledgeEntries(env, ids, user_id, embeddingModel))
 })
 
 export default knowledgeRoutes

@@ -1,5 +1,6 @@
 import { API } from './state.js';
 import { showNotification } from './utils.js';
+import { getAiSettings } from './ai-settings.js';
 /**
  * 전역 API 에러 인터셉터 설정 및 호출 모듈
  * 
@@ -9,7 +10,16 @@ import { showNotification } from './utils.js';
 
 export async function api(method, path, data = null, { silent = false } = {}) {
   try {
-    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    const ai = getAiSettings();
+    const headers = { 
+      'Content-Type': 'application/json',
+      'X-AI-Mode': ai.mode || '',
+      'X-AI-Base-Url': ai.baseUrl || '',
+      'X-AI-Api-Key': ai.apiKey || '',
+      'X-AI-Model': ai.aiModel || '',
+      'X-Embedding-Model': ai.embeddingModel || ''
+    };
+    const opts = { method, headers };
     if (data) opts.body = JSON.stringify(data);
     const res = await fetch(API + path, opts);
     

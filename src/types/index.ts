@@ -116,6 +116,7 @@ export interface ActivityLog {
 
 export interface Bindings {
   DB: D1Database;
+  VECTOR_DB: VectorizeIndex;
   OPENAI_API_KEY?: string;
   OPENAI_BASE_URL?: string;
   DEV_DIAGNOSTICS?: string;

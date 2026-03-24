@@ -10,5 +10,11 @@
       "database_name": "rockecho-production",
       "database_id": "placeholder-will-be-replaced"
     }
+  ],
+  "vectorize": [
+    {
+      "binding": "VECTOR_DB",
+      "index_name": "rockecho-vectors"
+    }
   ]
 }

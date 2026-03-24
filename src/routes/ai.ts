@@ -13,11 +13,20 @@ aiRoutes.post('/generate', async (c) => {
       return c.json({ error: 'incident_id, raw_input, dbms are required' }, 400)
     }
 
-    const entry = await generateKnowledgeDraft(c.env.DB, c.env, {
+    const overrideEnv = { ...c.env }
+    if (c.req.header('X-AI-Base-Url')) overrideEnv.OPENAI_BASE_URL = c.req.header('X-AI-Base-Url')
+    if (c.req.header('X-AI-Api-Key')) overrideEnv.OPENAI_API_KEY = c.req.header('X-AI-Api-Key')
+
+    const aiModel = c.req.header('X-AI-Model') || ''
+    const embeddingModel = c.req.header('X-Embedding-Model') || ''
+
+    const entry = await generateKnowledgeDraft(c.env.DB, overrideEnv, {
       incidentId: incident_id,
       rawInput: raw_input,
       dbms,
-      userId: user_id
+      userId: user_id,
+      aiModel,
+      embeddingModel
     })
 
     return c.json(entry)

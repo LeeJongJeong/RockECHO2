@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { AppError } from '../lib/AppError'
+import { generateEmbedding } from '../ai/embedding'
+import type { Bindings } from '../types'
 import { parseKnowledgeJsonFields, toInt, toJsonString } from '../lib/json'
 import { createActivityLog, listActivityLogsByKnowledgeEntryId } from '../repositories/activity-repository'
 import {
@@ -64,7 +66,7 @@ export async function getKnowledgeDetail(db: D1Database, id: string) {
 }
 
 export async function updateKnowledgeFields(
-  db: D1Database,
+  env: Pick<Bindings, 'DB' | 'VECTOR_DB' | 'OPENAI_API_KEY' | 'OPENAI_BASE_URL'>,
   id: string,
   body: {
     title?: string
@@ -80,8 +82,10 @@ export async function updateKnowledgeFields(
     status?: string
     reject_reason?: string
     user_id?: string
-  }
+  },
+  embeddingModel = ''
 ) {
+  const db = env.DB
   const now = new Date().toISOString()
 
   await updateKnowledgeEntry(db, id, {
@@ -138,10 +142,23 @@ export async function updateKnowledgeFields(
   }
 
   const updated = await getKnowledgeEntryById(db, id)
+  
+  if (body.status === 'approved' && env.OPENAI_API_KEY && updated) {
+    const textToEmbed = `Title: ${updated.title}\nSymptom: ${updated.symptom}\nCause: ${updated.cause}\nAction: ${updated.action}`
+    const embedding = await generateEmbedding(env.OPENAI_API_KEY, env.OPENAI_BASE_URL || 'https://api.openai.com/v1', textToEmbed, embeddingModel)
+    await env.VECTOR_DB.upsert([{ id, values: embedding, metadata: { dbms: String(updated.dbms || 'unknown') } }])
+  }
+
   return updated ? parseKnowledgeJsonFields(updated as Record<string, unknown>) : null
 }
 
-export async function approveKnowledgeEntry(db: D1Database, id: string, userId = 'user-003') {
+export async function approveKnowledgeEntry(
+  env: Pick<Bindings, 'DB' | 'VECTOR_DB' | 'OPENAI_API_KEY' | 'OPENAI_BASE_URL'>,
+  id: string,
+  userId = 'user-003',
+  embeddingModel = ''
+) {
+  const db = env.DB
   const now = new Date().toISOString()
   const entry = await getKnowledgeVersionRange(db, id)
 
@@ -168,6 +185,13 @@ export async function approveKnowledgeEntry(db: D1Database, id: string, userId =
     action: 'approved',
     createdAt: now
   })
+
+  const fullEntry = await getKnowledgeEntryById(db, id)
+  if (env.OPENAI_API_KEY && fullEntry) {
+    const textToEmbed = `Title: ${fullEntry.title}\nSymptom: ${fullEntry.symptom}\nCause: ${fullEntry.cause}\nAction: ${fullEntry.action}`
+    const embedding = await generateEmbedding(env.OPENAI_API_KEY, env.OPENAI_BASE_URL || 'https://api.openai.com/v1', textToEmbed, embeddingModel)
+    await env.VECTOR_DB.upsert([{ id, values: embedding, metadata: { dbms: String(fullEntry.dbms || 'unknown') } }])
+  }
 
   return { success: true, status: 'approved' }
 }
@@ -226,7 +250,13 @@ export async function submitKnowledgeFeedback(
   return { success: true, id: feedbackId }
 }
 
-export async function bulkApproveKnowledgeEntries(db: D1Database, ids: string[], userId = 'user-003') {
+export async function bulkApproveKnowledgeEntries(
+  env: Pick<Bindings, 'DB' | 'VECTOR_DB' | 'OPENAI_API_KEY' | 'OPENAI_BASE_URL'>,
+  ids: string[],
+  userId = 'user-003',
+  embeddingModel = ''
+) {
+  const db = env.DB
   const now = new Date().toISOString()
   const results: Array<{ id: string; success: boolean; error?: string }> = []
 
@@ -253,6 +283,13 @@ export async function bulkApproveKnowledgeEntries(db: D1Database, ids: string[],
       note: '일괄 승인',
       createdAt: now
     })
+
+    const fullEntry = await getKnowledgeEntryById(db, id)
+    if (env.OPENAI_API_KEY && fullEntry) {
+      const textToEmbed = `Title: ${fullEntry.title}\nSymptom: ${fullEntry.symptom}\nCause: ${fullEntry.cause}\nAction: ${fullEntry.action}`
+      const embedding = await generateEmbedding(env.OPENAI_API_KEY, env.OPENAI_BASE_URL || 'https://api.openai.com/v1', textToEmbed, embeddingModel)
+      await env.VECTOR_DB.upsert([{ id, values: embedding, metadata: { dbms: String(fullEntry.dbms || 'unknown') } }])
+    }
 
     results.push({ id, success: true })
   }
