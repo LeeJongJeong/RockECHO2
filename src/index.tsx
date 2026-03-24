@@ -12,9 +12,20 @@ import aiRoutes from './routes/ai'
 import usersRoutes from './routes/users'
 import healthRoutes from './routes/health'
 
+import { AppError } from './lib/AppError'
+
 const app = new Hono<{ Bindings: Bindings }>()
 
 app.use('*', logger())
+
+app.onError((err, c) => {
+  if (err instanceof AppError) {
+    return c.json({ error: err.message }, err.status as any);
+  }
+  console.error('Unhandled server error:', err);
+  return c.json({ error: 'Internal Server Error' }, 500);
+});
+
 app.use('/api/*', cors({
   origin: '*',
   allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'],

@@ -51,3 +51,15 @@ export function showModal(content) {
   container.appendChild(overlay);
   return overlay;
 }
+
+export function copyText(text, label) {
+  navigator.clipboard.writeText(text).then(() => {
+    showNotification(`${label} copied`, 'success');
+  }).catch(() => {
+    showNotification(`Failed to copy ${label.toLowerCase()}`, 'error');
+  });
+}
+
+export function parseTags(value) {
+  return value.split(',').map((tag) => tag.trim()).filter(Boolean);
+}

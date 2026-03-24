@@ -1,7 +1,9 @@
 import { api } from '../api.js';
 import { CURRENT_USER, DBMS_LABELS } from '../state.js';
-import { h, showNotification } from '../utils.js';
+import { h, showNotification, parseTags } from '../utils.js';
 import { navigate } from '../router.js';
+import { fieldLabel } from '../components/FieldLabel.js';
+import { stepIndicator } from '../components/StepIndicator.js';
 
 const STEP_LABELS = ['Raw Input', 'AI 초안 생성', '검토+수정', 'Reviewer 승인', '완료'];
 
@@ -23,16 +25,7 @@ const PRIORITY_OPTIONS = {
   }
 };
 
-function parseTags(value) {
-  return value.split(',').map((tag) => tag.trim()).filter(Boolean);
-}
 
-function fieldLabel(title, hint = '') {
-  return h('div', { className: 'mb-2' },
-    h('span', { className: 'text-sm font-medium text-gray-800' }, title),
-    hint ? h('span', { className: 'text-xs text-gray-400 ml-2' }, hint) : null
-  );
-}
 
 export function renderQuickInput(prefill = '') {
   const main = document.querySelector('.main-content');
@@ -44,36 +37,20 @@ export function renderQuickInput(prefill = '') {
   let knowledgeEntry = null;
 
   const container = h('div', { className: 'p-6 max-w-5xl' });
-  const stepIndicator = h('div', { className: 'mb-8' });
+  const stepIndicatorEl = h('div', { className: 'mb-8' });
   const content = h('div', { id: 'step-content' });
 
   container.appendChild(h('div', { className: 'mb-6' },
     h('h1', { className: 'text-2xl font-bold text-gray-900' }, '장애 기록하기'),
     h('p', { className: 'text-sm text-gray-400 mt-1' }, 'RockECHO AI가 구조화를 도와드립니다 — 최소 입력으로 지식을 축적하세요')
   ));
-  container.appendChild(stepIndicator);
+  container.appendChild(stepIndicatorEl);
   container.appendChild(content);
   main.appendChild(container);
 
   function renderStepIndicator() {
-    stepIndicator.innerHTML = '';
-    const wrap = h('div', { className: 'step-indicator' });
-
-    STEP_LABELS.forEach((label, index) => {
-      const stepNumber = index + 1;
-      const status = stepNumber < currentStep ? 'step-done' : stepNumber === currentStep ? 'step-active' : 'step-pending';
-
-      wrap.appendChild(h('div', { className: `step-item ${status}` },
-        h('div', { className: 'step-circle' }, stepNumber < currentStep ? h('i', { className: 'fas fa-check' }) : String(stepNumber)),
-        h('p', { className: `text-xs mt-2 font-medium ${stepNumber === currentStep ? 'text-indigo-600' : stepNumber < currentStep ? 'text-green-600' : 'text-gray-400'}` }, label)
-      ));
-
-      if (stepNumber < STEP_LABELS.length) {
-        wrap.appendChild(h('div', { className: `step-line ${stepNumber < currentStep ? 'step-done' : 'step-pending'}`, style: 'height:2px; flex:1; margin-bottom:18px' }));
-      }
-    });
-
-    stepIndicator.appendChild(wrap);
+    stepIndicatorEl.innerHTML = '';
+    stepIndicatorEl.appendChild(stepIndicator(STEP_LABELS, currentStep));
   }
 
   function renderStep() {

@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid'
+import { AppError } from '../lib/AppError'
 import { parseKnowledgeJsonFields, toInt, toJsonString } from '../lib/json'
 import { createActivityLog, listActivityLogsByKnowledgeEntryId } from '../repositories/activity-repository'
 import {
@@ -145,11 +146,11 @@ export async function approveKnowledgeEntry(db: D1Database, id: string, userId =
   const entry = await getKnowledgeVersionRange(db, id)
 
   if (!entry) {
-    return { ok: false as const, code: 404, body: { error: 'Not found' } }
+    throw new AppError('Not found', 404)
   }
 
   if (!entry.version_range) {
-    return { ok: false as const, code: 400, body: { error: 'version_range is required before approval' } }
+    throw new AppError('version_range is required before approval', 400)
   }
 
   await setKnowledgeApprovalState(db, {
@@ -168,7 +169,7 @@ export async function approveKnowledgeEntry(db: D1Database, id: string, userId =
     createdAt: now
   })
 
-  return { ok: true as const, code: 200, body: { success: true, status: 'approved' } }
+  return { success: true, status: 'approved' }
 }
 
 export async function rejectKnowledgeEntry(db: D1Database, id: string, reason: string, userId = 'user-003') {

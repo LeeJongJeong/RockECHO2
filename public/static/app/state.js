@@ -1,3 +1,11 @@
+/**
+ * @typedef {import('../../../src/types').KnowledgeEntry} KnowledgeEntry
+ * @typedef {import('../../../src/types').Incident} Incident
+ * @typedef {import('../../../src/types').RunbookStep} RunbookStep
+ * @typedef {import('../../../src/types').DashboardStats} DashboardStats
+ * @typedef {import('../../../src/types').SearchEvent} SearchEvent
+ */
+
 export const API = '';
 export const CURRENT_USER = { id: 'user-004', name: 'Engineer Park', role: 'engineer' };
 
@@ -54,6 +62,10 @@ export const SEED_TARGETS = {
 export const SEED_TOTAL = 50;
 
 let currentPage = 'dashboard';
+
+/**
+ * @type {{ query: string, results: KnowledgeEntry[], searchEventId: string | null, currentIndex: number }}
+ */
 export const searchContext = { query: '', results: [], searchEventId: null, currentIndex: 0 };
 
 export function getCurrentPage() {

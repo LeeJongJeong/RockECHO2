@@ -1,6 +1,6 @@
-import { CURRENT_USER, getCurrentPage } from './state.js';
-import { h } from './utils.js';
-import { navigate } from './router.js';
+import { CURRENT_USER, getCurrentPage } from '../state.js';
+import { h } from '../utils.js';
+import { navigate } from '../router.js';
 
 export function renderSidebar(onUserChange) {
   const sidebar = h('div', { className: 'w-64 bg-white border-r border-slate-200 flex flex-col flex-shrink-0' });
@@ -83,28 +83,4 @@ export function renderSidebar(onUserChange) {
   ));
 
   return sidebar;
-}
-
-export function sectionCard(title, content, options = {}) {
-  const { maxHeight = '320px', scrollable = true } = options;
-  return h('div', { className: 'card mb-4' },
-    h('h3', { className: 'font-semibold text-gray-900 mb-2' }, title),
-    h('div', {
-      className: 'section-scroll text-gray-700 text-sm leading-relaxed whitespace-pre-wrap',
-      style: scrollable ? `max-height:${maxHeight}; overflow-y:auto; overflow-x:hidden; padding-right:4px;` : ''
-    }, content || '-')
-  );
-}
-
-export function causeBadge(confidence) {
-  const config = {
-    ai_inferred: { label: 'AI Inferred', className: 'inferred', icon: 'fa-robot' },
-    confirmed: { label: 'Confirmed', className: 'confirmed', icon: 'fa-user-check' },
-    expert_verified: { label: 'Expert Verified', className: 'expert', icon: 'fa-award' }
-  };
-  const item = config[confidence] || config.ai_inferred;
-  return h('span', { className: `ai-badge ${item.className}` },
-    h('i', { className: `fas ${item.icon}` }),
-    item.label
-  );
 }

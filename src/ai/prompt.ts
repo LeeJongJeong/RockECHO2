@@ -28,6 +28,7 @@ export function buildUserPrompt(rawInput: string, dbms: string): string {
     'Analyze the following raw incident notes and produce a JSON object with these keys:',
     'title, symptom, cause, action, runbook, diagnostic_steps, tags, aliases, version_range, ai_quality_score',
     'Requirements:',
+    '- All textual content (title, symptom, cause, action, step titles, etc.) MUST be written in natural Korean (한국어).',
     '- title: concise and searchable',
     '- symptom: observed facts only',
     '- cause: likely root cause with uncertainty clearly marked',

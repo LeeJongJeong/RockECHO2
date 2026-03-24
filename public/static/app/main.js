@@ -1,4 +1,4 @@
-import { renderSidebar } from './components.js';
+import { renderSidebar } from './components/Sidebar.js';
 import { renderPage } from './pages/index.js';
 import { getCurrentPage, setCurrentPage } from './state.js';
 import { initRouter, navigate, registerRenderHandler } from './router.js';
