@@ -17,7 +17,8 @@ import {
   setKnowledgeApprovedMetadata,
   setKnowledgeRejectedState,
   setKnowledgeReviewedAt,
-  updateKnowledgeEntry
+  updateKnowledgeEntry,
+  deleteKnowledgeEntry
 } from '../repositories/knowledge-repository'
 
 export async function listKnowledgeSummaries(
@@ -295,4 +296,23 @@ export async function bulkApproveKnowledgeEntries(
   }
 
   return { results }
+}
+
+export async function deleteKnowledge(
+  env: Pick<Bindings, 'DB' | 'VECTOR_DB'>,
+  id: string
+) {
+  const db = env.DB
+  
+  await deleteKnowledgeEntry(db, id)
+  
+  if (env.VECTOR_DB) {
+    try {
+      await env.VECTOR_DB.deleteByIds([id])
+    } catch (err) {
+      console.warn('Vectorize deletion failed or skipped:', err)
+    }
+  }
+  
+  return { success: true }
 }

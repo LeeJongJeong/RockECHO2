@@ -9,7 +9,8 @@ import {
   listKnowledgeSummaries,
   rejectKnowledgeEntry,
   submitKnowledgeFeedback,
-  updateKnowledgeFields
+  updateKnowledgeFields,
+  deleteKnowledge
 } from '../services/knowledge-service'
 
 const knowledgeRoutes = new Hono<{ Bindings: Bindings }>()
@@ -61,6 +62,15 @@ knowledgeRoutes.post('/:id/feedback', async (c) => {
     throw new AppError('feedback is required', 400)
   }
   return c.json(await submitKnowledgeFeedback(c.env.DB, c.req.param('id'), body))
+})
+
+knowledgeRoutes.delete('/:id', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  if (body.role !== 'admin') {
+    throw new AppError('Admin role is required to delete knowledge entries', 403)
+  }
+  const { env } = getAiEnv(c)
+  return c.json(await deleteKnowledge(env, c.req.param('id')))
 })
 
 knowledgeRoutes.post('/bulk-approve', async (c) => {

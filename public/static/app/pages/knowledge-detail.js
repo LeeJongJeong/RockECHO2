@@ -274,6 +274,24 @@ export async function renderKnowledgeDetail(id, searchEventId, index, total) {
       className: 'btn-secondary w-full text-sm text-left',
       onClick: () => copyText(`${entry.title || ''}\n\n${entry.symptom || ''}\n\n${entry.action || ''}`, 'Summary')
     }, 'Copy summary'));
+    
+    if (CURRENT_USER.role === 'admin') {
+      const deleteBtn = h('button', {
+        className: 'btn-secondary w-full text-sm text-left text-red-600 mt-2 border-red-200 hover:bg-red-50 transition',
+        onClick: async () => {
+          if (!confirm('정말로 이 장애 기록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없으며, 벡터 검색(AI) 데이터베이스에서도 영구적으로 지워집니다.')) return;
+          try {
+            await api('DELETE', `/api/knowledge/${id}`, { role: CURRENT_USER.role, user_id: CURRENT_USER.id });
+            showNotification('성공적으로 삭제되었습니다.', 'success');
+            navigate('dashboard');
+          } catch (e) {
+            showNotification('삭제 실패: ' + e.message, 'error');
+          }
+        }
+      }, h('i', { className: 'fas fa-trash-alt mr-2' }), 'Delete entry (Admin)');
+      actionsCard.appendChild(deleteBtn);
+    }
+    
     right.appendChild(actionsCard);
 
     layout.appendChild(left);

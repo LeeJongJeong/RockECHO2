@@ -1,6 +1,32 @@
 import type { KnowledgeEntry, RunbookStep } from '../types'
 import { generateFallback, getDefaultVersionRange } from './fallback'
 
+function containsHangul(value: string): boolean {
+  return /[\uAC00-\uD7A3]/.test(value)
+}
+
+function containsLatinLetters(value: string): boolean {
+  return /[A-Za-z]/.test(value)
+}
+
+function normalizeNarrativeText(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') {
+    return fallback
+  }
+
+  const trimmed = value.trim()
+  if (trimmed.length <= 10) {
+    return fallback
+  }
+
+  // If the model still returns an English-only narrative, fall back to Korean-safe text.
+  if (containsLatinLetters(trimmed) && !containsHangul(trimmed)) {
+    return fallback
+  }
+
+  return trimmed
+}
+
 function normalizeSteps(value: unknown, prefix: string, fallback: RunbookStep[]): RunbookStep[] {
   if (!Array.isArray(value) || value.length === 0) {
     return fallback
@@ -20,10 +46,10 @@ export function sanitizeKnowledge(parsed: Record<string, unknown>, rawInput: str
   const fallback = generateFallback(rawInput, dbms)
   const title = typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title.trim() : fallback.title
   const symptom = typeof parsed.symptom === 'string' && parsed.symptom.trim().length > 10 ? parsed.symptom.trim() : rawInput
-  const cause = typeof parsed.cause === 'string' && parsed.cause.trim().length > 10 ? parsed.cause.trim() : fallback.cause
-  const action = typeof parsed.action === 'string' && parsed.action.trim().length > 10 ? parsed.action.trim() : fallback.action
-  const runbook = normalizeSteps(parsed.runbook, 'Step', fallback.runbook || [])
-  const diagnostic_steps = normalizeSteps(parsed.diagnostic_steps, 'Check', fallback.diagnostic_steps || [])
+  const cause = normalizeNarrativeText(parsed.cause, fallback.cause || '')
+  const action = normalizeNarrativeText(parsed.action, fallback.action || '')
+  const runbook = normalizeSteps(parsed.runbook, '\uB2E8\uACC4', fallback.runbook || [])
+  const diagnostic_steps = normalizeSteps(parsed.diagnostic_steps, '\uC810\uAC80', fallback.diagnostic_steps || [])
   const tags = Array.isArray(parsed.tags) && parsed.tags.length > 0
     ? parsed.tags.filter((tag): tag is string => typeof tag === 'string')
     : (fallback.tags || [])

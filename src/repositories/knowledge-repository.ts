@@ -312,3 +312,18 @@ export async function markKnowledgeNeedsReview(db: D1Database, id: string, updat
     UPDATE knowledge_entry SET status = 'needs_review', updated_at = ? WHERE id = ? AND status = 'approved'
   `).bind(updatedAt, id).run()
 }
+
+export async function deleteKnowledgeEntry(db: D1Database, id: string) {
+  const entry = await db.prepare('SELECT incident_id FROM knowledge_entry WHERE id = ?').bind(id).first<{ incident_id: string }>()
+  
+  await db.prepare('DELETE FROM search_feedback WHERE knowledge_entry_id = ?').bind(id).run()
+  await db.prepare('DELETE FROM activity_log WHERE knowledge_entry_id = ?').bind(id).run()
+  await db.prepare('DELETE FROM knowledge_entry WHERE id = ?').bind(id).run()
+  
+  if (entry?.incident_id) {
+    const others = await db.prepare('SELECT COUNT(*) as count FROM knowledge_entry WHERE incident_id = ?').bind(entry.incident_id).first<{ count: number }>()
+    if (others && others.count === 0) {
+      await db.prepare('DELETE FROM incident WHERE id = ?').bind(entry.incident_id).run()
+    }
+  }
+}

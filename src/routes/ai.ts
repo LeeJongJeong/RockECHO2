@@ -5,6 +5,23 @@ import { generateKnowledgeDraft } from '../services/ai-service'
 
 const aiRoutes = new Hono<{ Bindings: Bindings }>()
 
+aiRoutes.get('/local-models', async (c) => {
+  try {
+    const baseUrl = c.req.query('baseUrl') || 'http://127.0.0.1:11434/v1'
+    const ollamaUrl = baseUrl.replace(/\/v1\/?$/, '') + '/api/tags'
+    
+    // Only fetch from localhost or internal IP for security
+    const res = await fetch(ollamaUrl)
+    if (!res.ok) throw new Error('Ollama server returned ' + res.status)
+
+    const data: any = await res.json()
+    const models = (data.models || []).map((m: any) => m.name)
+    return c.json({ models })
+  } catch (error) {
+    return c.json({ error: getErrorMessage(error) }, 500)
+  }
+})
+
 aiRoutes.post('/generate', async (c) => {
   try {
     const { incident_id, raw_input, dbms, user_id } = await c.req.json()

@@ -38,7 +38,7 @@ export async function generateKnowledgeDraft(
         
         contextInfo = entries
           .filter(Boolean)
-          .map((entry: any, idx) => `[Past Reference ${idx + 1}]\nTitle: ${entry.title}\nSymptom: ${entry.symptom}\nCause: ${entry.cause}\nAction: ${entry.action}\nRunbook: ${entry.runbook}`)
+          .map((entry: any, idx) => `[\uACFC\uAC70 \uCC38\uACE0 ${idx + 1}]\n\uC81C\uBAA9: ${entry.title}\n\uC99D\uC0C1: ${entry.symptom}\n\uC6D0\uC778: ${entry.cause}\n\uC870\uCE58: ${entry.action}\n\uB7F0\uBD81: ${entry.runbook}`)
           .join('\n\n')
       }
     } catch (err) {
