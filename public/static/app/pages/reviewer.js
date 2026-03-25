@@ -43,6 +43,69 @@ function detailSection(title, content) {
   return card;
 }
 
+function getQualityMeta(report) {
+  const errors = (report?.issues || []).filter((issue) => issue.severity === 'error').length;
+  const warnings = (report?.issues || []).filter((issue) => issue.severity === 'warning').length;
+
+  if (errors > 0) {
+    return {
+      badgeClass: 'bg-rose-100 text-rose-700',
+      panelClass: 'bg-rose-50 border border-rose-200 text-rose-900',
+      iconClass: 'fas fa-triangle-exclamation text-rose-500',
+      label: `AI Quality ${report.score}/100`,
+      summary: `Fix recommended: ${errors} error, ${warnings} warning`
+    };
+  }
+
+  if (warnings > 0) {
+    return {
+      badgeClass: 'bg-amber-100 text-amber-700',
+      panelClass: 'bg-amber-50 border border-amber-200 text-amber-900',
+      iconClass: 'fas fa-circle-exclamation text-amber-500',
+      label: `AI Quality ${report.score}/100`,
+      summary: `Review recommended: ${warnings} warning`
+    };
+  }
+
+  return {
+    badgeClass: 'bg-emerald-100 text-emerald-700',
+    panelClass: 'bg-emerald-50 border border-emerald-200 text-emerald-900',
+    iconClass: 'fas fa-circle-check text-emerald-500',
+    label: `AI Quality ${report?.score || 100}/100`,
+    summary: 'No quality issues detected'
+  };
+}
+
+function qualityPanel(report) {
+  if (!report) return null;
+
+  const meta = getQualityMeta(report);
+  const panel = h('div', { className: `${meta.panelClass} rounded-lg px-5 py-4 mb-6 shadow-sm` });
+  panel.appendChild(h('div', { className: 'flex items-start gap-4' },
+    h('i', { className: `${meta.iconClass} text-xl mt-0.5` }),
+    h('div', { className: 'flex-1' },
+      h('div', { className: 'flex items-center justify-between gap-3 flex-wrap' },
+        h('h3', { className: 'text-sm font-extrabold tracking-wide uppercase' }, 'AI Quality Check'),
+        h('span', { className: `text-xs px-3 py-1 rounded-md font-bold ${meta.badgeClass}` }, meta.label)
+      ),
+      h('p', { className: 'text-sm font-medium mt-2' }, meta.summary)
+    )
+  ));
+
+  if (Array.isArray(report.issues) && report.issues.length > 0) {
+    const issueList = h('ul', { className: 'mt-4 space-y-2 text-[13px] leading-6' });
+    report.issues.slice(0, 6).forEach((issue, index) => {
+      issueList.appendChild(h('li', { className: 'flex items-start gap-2' },
+        h('span', { className: 'mt-1 text-[10px] font-bold uppercase opacity-70' }, issue.severity),
+        h('span', {}, `${index + 1}. ${issue.message}`)
+      ));
+    });
+    panel.appendChild(issueList);
+  }
+
+  return panel;
+}
+
 function editSection(title, key, buffer) {
   const card = h('div', { className: 'bg-white border border-indigo-200 rounded-lg p-5 mb-4 shadow-sm ring-1 ring-indigo-50' },
     h('h3', { className: 'text-[12px] font-bold text-indigo-600 uppercase tracking-widest mb-3 flex items-center gap-2' },
@@ -65,6 +128,30 @@ function editSection(title, key, buffer) {
 
 let selectedId = null;
 let activeTab = 'reviewed';
+let isSidebarCollapsed = false;
+
+function collapsibleRawInput(rawText) {
+  let isExpanded = false;
+  
+  const contentDiv = h('div', { className: 'mt-3 whitespace-pre-wrap text-[14px] text-slate-700 leading-relaxed font-mono bg-slate-50 p-5 rounded-lg border border-slate-200 hidden' }, rawText || '내용 없음');
+  
+  const toggleBtn = h('button', {
+    className: 'flex items-center justify-center w-full gap-2 px-4 py-3 bg-white hover:bg-slate-50 text-slate-600 text-[14px] font-bold rounded-lg transition-colors border border-slate-200 shadow-sm',
+    onClick: () => {
+      isExpanded = !isExpanded;
+      if (isExpanded) {
+        contentDiv.classList.remove('hidden');
+        toggleBtn.innerHTML = '엔지니어 원본 닫기 <i class="fas fa-chevron-up ml-1"></i>';
+      } else {
+        contentDiv.classList.add('hidden');
+        toggleBtn.innerHTML = '상세 원본 보기 (RAW INPUT) <i class="fas fa-chevron-down ml-1"></i>';
+      }
+    }
+  });
+  toggleBtn.innerHTML = '상세 원본 보기 (RAW INPUT) <i class="fas fa-chevron-down ml-1"></i>';
+  
+  return h('div', { className: 'mt-10 mb-2 border-t border-slate-200 pt-8' }, toggleBtn, contentDiv);
+}
 
 export async function renderReviewer() {
   const main = document.querySelector('.main-content');
@@ -133,10 +220,32 @@ export async function renderReviewer() {
     container.appendChild(kpiGrid);
 
     // Split Layout Container
-    const splitLayout = h('div', { className: 'flex gap-6 flex-1 min-h-[600px] max-h-[800px]' });
+    const splitLayout = h('div', { className: 'flex gap-6 flex-1 min-h-[600px] transition-all duration-300' });
 
     // Left Pane (List Area)
-    const leftPane = h('div', { className: 'w-1/3 flex flex-col bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden' });
+    const leftPane = h('div', { className: 'w-1/3 flex flex-col bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden transition-all duration-300' });
+    
+    // Right Pane (Detail Area)
+    const rightPane = h('div', { className: 'w-2/3 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col relative overflow-hidden transition-all duration-300' });
+
+    function updateLayout() {
+      if (selectedId) {
+        kpiGrid.style.display = 'none';
+        splitLayout.classList.remove('max-h-[800px]');
+      } else {
+        kpiGrid.style.display = 'grid';
+        splitLayout.classList.add('max-h-[800px]');
+        isSidebarCollapsed = false;
+      }
+
+      if (isSidebarCollapsed) {
+        leftPane.style.display = 'none';
+        rightPane.className = 'w-full bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col relative overflow-hidden transition-all duration-300';
+      } else {
+        leftPane.style.display = 'flex';
+        rightPane.className = 'w-2/3 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col relative overflow-hidden transition-all duration-300';
+      }
+    }
     
     const tabs = [
       { id: 'reviewed', label: `대기 (${reviewed.total})`, items: reviewed.items },
@@ -156,6 +265,7 @@ export async function renderReviewer() {
           onClick: () => {
             activeTab = tab.id;
             selectedId = null; // Tab 변경 시 선택 항목 포맷
+            updateLayout();
             renderList();
             renderRightPane();
           }
@@ -195,6 +305,7 @@ export async function renderReviewer() {
         currentItems.forEach((item) => {
           const row = queueRow(item, async (id) => {
             selectedId = id;
+            updateLayout();
             renderList();
             renderRightPane();
           });
@@ -210,9 +321,6 @@ export async function renderReviewer() {
     leftPane.appendChild(tabsContainer);
     leftPane.appendChild(listContainer);
     splitLayout.appendChild(leftPane);
-
-    // Right Pane (Detail Area)
-    const rightPane = h('div', { className: 'w-2/3 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col relative overflow-hidden' });
     
     async function renderRightPane() {
       rightPane.innerHTML = '';
@@ -239,6 +347,7 @@ export async function renderReviewer() {
         let editBuffer = {
           symptom: entry.symptom || '',
           cause: entry.cause || '',
+          error_log: entry.error_log || '',
           action: entry.action || '',
           version_range: entry.version_range || ''
         };
@@ -251,20 +360,49 @@ export async function renderReviewer() {
           footer.innerHTML = '';
 
           // Detail Header
+          const headerRow = h('div', { className: 'flex items-center justify-between mb-4' });
+          const badgesContainer = h('div', { className: 'flex items-center gap-3 flex-wrap' },
+            h('span', { className: `text-xs px-3 py-1 rounded-md font-bold uppercase tracking-wider shadow-sm ${DBMS_COLORS[entry.dbms] || 'bg-slate-100 text-slate-600'}` }, DBMS_LABELS[entry.dbms] || entry.dbms || '미상 DBMS'),
+            h('span', { className: `text-xs px-3 py-1 rounded-md font-bold uppercase tracking-wider shadow-sm ${PRIORITY_COLORS[entry.priority] || 'bg-slate-100 text-slate-600'}` }, PRIORITY_LABELS[entry.priority] || entry.priority || 'P2'),
+            h('span', { className: `text-xs px-3 py-1 rounded-md font-bold shadow-sm ${status.className}` }, status.label)
+          );
+
+          if (entry.quality_report) {
+            const qualityMeta = getQualityMeta(entry.quality_report);
+            badgesContainer.appendChild(
+              h('span', { className: `text-xs px-3 py-1 rounded-md font-bold shadow-sm ${qualityMeta.badgeClass}` }, qualityMeta.label)
+            );
+          }
+
+          const toggleBtn = h('button', {
+            className: 'px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 shadow-sm border border-slate-200',
+            onClick: () => {
+              isSidebarCollapsed = !isSidebarCollapsed;
+              updateLayout();
+              toggleBtn.innerHTML = isSidebarCollapsed ? '<i class="fas fa-list"></i> 리스트 열기' : '<i class="fas fa-expand"></i> 크게 보기';
+            }
+          });
+          toggleBtn.innerHTML = isSidebarCollapsed ? '<i class="fas fa-list"></i> 리스트 열기' : '<i class="fas fa-expand"></i> 크게 보기';
+
+          headerRow.appendChild(badgesContainer);
+          headerRow.appendChild(toggleBtn);
+
           contentArea.appendChild(h('div', { className: 'mb-8 border-b border-slate-200 pb-6' },
-            h('div', { className: 'flex items-center gap-3 flex-wrap mb-4' },
-              h('span', { className: `text-xs px-3 py-1 rounded-md font-bold uppercase tracking-wider shadow-sm ${DBMS_COLORS[entry.dbms] || 'bg-slate-100 text-slate-600'}` }, DBMS_LABELS[entry.dbms] || entry.dbms || '미상 DBMS'),
-              h('span', { className: `text-xs px-3 py-1 rounded-md font-bold uppercase tracking-wider shadow-sm ${PRIORITY_COLORS[entry.priority] || 'bg-slate-100 text-slate-600'}` }, PRIORITY_LABELS[entry.priority] || entry.priority || 'P2'),
-              h('span', { className: `text-xs px-3 py-1 rounded-md font-bold shadow-sm ${status.className}` }, status.label),
-              h('span', { className: 'text-xs text-slate-400 font-medium ml-auto tracking-wide' }, entry.incident_number || '-')
-            ),
+            headerRow,
             h('h2', { className: 'text-3xl font-extrabold text-slate-900 tracking-tight leading-snug mb-3' }, entry.title || '제목 없음'),
-            h('div', { className: 'flex gap-3 text-sm font-medium text-slate-500' },
-              h('span', {}, h('i', { className: 'fa-regular fa-square-plus mr-1.5' }), `등록자: ${entry.creator_name || 'System'}`),
-              h('span', {}, '\u00B7'),
-              h('span', {}, h('i', { className: 'fa-regular fa-clock mr-1.5' }), `업데이트: ${timeAgo(entry.updated_at)}`)
+            h('div', { className: 'flex justify-between items-center text-sm font-medium text-slate-500' },
+              h('div', { className: 'flex gap-3' },
+                h('span', {}, h('i', { className: 'fa-regular fa-square-plus mr-1.5' }), `등록자: ${entry.creator_name || 'System'}`),
+                h('span', {}, '\u00B7'),
+                h('span', {}, h('i', { className: 'fa-regular fa-clock mr-1.5' }), `업데이트: ${timeAgo(entry.updated_at)}`)
+              ),
+              h('span', { className: 'text-slate-400 font-bold tracking-wide bg-slate-100 px-3 py-1 rounded-md' }, entry.incident_number || '-')
             )
           ));
+
+          if (entry.quality_report) {
+            contentArea.appendChild(qualityPanel(entry.quality_report));
+          }
 
           if (!entry.version_range && entry.status !== 'approved' && !isEditing) {
             contentArea.appendChild(h('div', { className: 'bg-orange-50 border border-orange-200 rounded-lg px-5 py-4 mb-6 text-[15px] font-medium text-orange-700 flex items-center gap-4 shadow-sm' },
@@ -279,19 +417,21 @@ export async function renderReviewer() {
               h('i', { className: 'fas fa-pen-fancy text-xl' }),
               '초안 편집 모드: 기술된 내용을 전문가의 시각으로 직접 보완해주세요.'
             ));
-            if (entry.raw_input) {
-              contentArea.appendChild(detailSection('엔지니어 원본 입력 (수정 불가)', entry.raw_input));
-            }
             contentArea.appendChild(editSection('초안 증상 (Symptom)', 'symptom', editBuffer));
             contentArea.appendChild(editSection('근본 원인 (Cause)', 'cause', editBuffer));
+            contentArea.appendChild(editSection('에러 로그 (Error Log)', 'error_log', editBuffer));
             contentArea.appendChild(editSection('대응 조치 및 방안 (Action)', 'action', editBuffer));
             contentArea.appendChild(editSection('적용 버전 (Version Range)', 'version_range', editBuffer));
-          } else {
+            
             if (entry.raw_input) {
-              contentArea.appendChild(detailSection('엔지니어 원본 입력 (Raw Input)', entry.raw_input));
+              contentArea.appendChild(collapsibleRawInput(entry.raw_input));
             }
+          } else {
             contentArea.appendChild(detailSection('초안 증상 (Symptom)', entry.symptom));
             contentArea.appendChild(detailSection('근본 원인 (Cause)', entry.cause));
+            if (entry.error_log) {
+              contentArea.appendChild(detailSection('에러 로그 (Error Log)', entry.error_log));
+            }
             contentArea.appendChild(detailSection('대응 조치 및 방안 (Action)', entry.action));
             contentArea.appendChild(detailSection('적용 버전 (Version Range)', entry.version_range || '[미지정]'));
 
@@ -305,6 +445,10 @@ export async function renderReviewer() {
                 ? renderSqlList('Diagnostic Steps', entry.diagnostic_steps)
                 : detailSection('Diagnostic Steps', '[미지정]')
             );
+
+            if (entry.raw_input) {
+              contentArea.appendChild(collapsibleRawInput(entry.raw_input));
+            }
 
             // Activity Logs (Only show when not editing relative to avoid clutter)
             if (entry.activity_logs?.length > 0) {
@@ -428,6 +572,7 @@ export async function renderReviewer() {
       }
     }
 
+    updateLayout();
     renderList();
     renderRightPane();
 

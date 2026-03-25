@@ -29,6 +29,29 @@ async function submitFeedback(knowledgeId, feedback, searchEventId, resultRank, 
 }
 
 
+function collapsibleRawInput(rawText) {
+  let isExpanded = false;
+  
+  const contentDiv = h('div', { className: 'mt-3 whitespace-pre-wrap text-[14px] text-slate-700 leading-relaxed font-mono bg-slate-50 p-5 rounded-lg border border-slate-200 hidden' }, rawText || '내용 없음');
+  
+  const toggleBtn = h('button', {
+    className: 'flex items-center justify-center w-full gap-2 px-4 py-3 bg-white hover:bg-slate-50 text-slate-600 text-[14px] font-bold rounded-lg transition-colors border border-slate-200 shadow-sm',
+    onClick: () => {
+      isExpanded = !isExpanded;
+      if (isExpanded) {
+        contentDiv.classList.remove('hidden');
+        toggleBtn.innerHTML = '엔지니어 원본 닫기 <i class="fas fa-chevron-up ml-1"></i>';
+      } else {
+        contentDiv.classList.add('hidden');
+        toggleBtn.innerHTML = '상세 원본 보기 (RAW INPUT) <i class="fas fa-chevron-down ml-1"></i>';
+      }
+    }
+  });
+  toggleBtn.innerHTML = '상세 원본 보기 (RAW INPUT) <i class="fas fa-chevron-down ml-1"></i>';
+  
+  return h('div', { className: 'mt-10 mb-2 border-t border-slate-200 pt-8' }, toggleBtn, contentDiv);
+}
+
 export async function renderKnowledgeDetail(id, searchEventId, index, total) {
   const main = document.querySelector('.main-content');
   main.innerHTML = '<div class="p-6 text-center mt-20 text-gray-400"><i class="fas fa-spinner fa-spin text-3xl"></i></div>';
@@ -108,12 +131,13 @@ export async function renderKnowledgeDetail(id, searchEventId, index, total) {
     }
     left.appendChild(header);
 
-    if (entry.raw_input) {
-      left.appendChild(sectionCard('Raw Input (엔지니어 원본)', entry.raw_input, { maxHeight: '150px' }));
-    }
-
     left.appendChild(sectionCard('Symptom', entry.symptom || '-', { maxHeight: '220px' }));
     left.appendChild(sectionCard('Cause', entry.cause || '-', { maxHeight: '220px' }));
+    
+    if (entry.error_log) {
+      left.appendChild(sectionCard('Error Log', entry.error_log, { maxHeight: '220px' }));
+    }
+    
     left.appendChild(sectionCard('Action', entry.action || '-', { maxHeight: '220px' }));
 
     if (Array.isArray(entry.runbook) && entry.runbook.length > 0) {
@@ -122,6 +146,10 @@ export async function renderKnowledgeDetail(id, searchEventId, index, total) {
 
     if (Array.isArray(entry.diagnostic_steps) && entry.diagnostic_steps.length > 0) {
       left.appendChild(renderSqlList('Diagnostic Steps', entry.diagnostic_steps));
+    }
+
+    if (entry.raw_input) {
+      left.appendChild(collapsibleRawInput(entry.raw_input));
     }
 
     const resultRank = typeof index === 'number' ? index + 1 : null;

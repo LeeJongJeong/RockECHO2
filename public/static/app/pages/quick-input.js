@@ -213,6 +213,7 @@ export function renderQuickInput(prefill = '') {
       ['title', '제목', 'input'],
       ['symptom', '증상', 'textarea'],
       ['cause', '원인', 'textarea'],
+      ['error_log', '에러 로그 (Error Log)', 'textarea'],
       ['action', '조치', 'textarea'],
       ['version_range', '적용 버전 범위', 'input']
     ];
@@ -248,6 +249,7 @@ export function renderQuickInput(prefill = '') {
         title: knowledgeEntry.title,
         symptom: knowledgeEntry.symptom,
         cause: knowledgeEntry.cause,
+        error_log: knowledgeEntry.error_log,
         action: knowledgeEntry.action,
         version_range: knowledgeEntry.version_range,
         tags: knowledgeEntry.tags,

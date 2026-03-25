@@ -8,6 +8,77 @@ import { createActivityLog } from '../repositories/activity-repository'
 import { getKnowledgeEntryById, insertKnowledgeEntry } from '../repositories/knowledge-repository'
 import { generateEmbedding } from '../ai/embedding'
 
+function formatContextSnippet(entry: Record<string, unknown>, idx: number): string {
+  const parsed = parseKnowledgeJsonFields(entry)
+  const runbookPreview = (parsed.runbook || [])
+    .slice(0, 3)
+    .map((step) => `${step.step}. ${step.title}\nSQL: ${step.sql}`)
+    .join(' | ')
+  const diagnosticPreview = (parsed.diagnostic_steps || [])
+    .slice(0, 3)
+    .map((step) => `${step.step}. ${step.title}\nSQL: ${step.sql}`)
+    .join(' | ')
+
+  return [
+    `[Approved Reference ${idx + 1}]`,
+    `Title: ${parsed.title || ''}`,
+    `Symptom: ${parsed.symptom || ''}`,
+    `Cause: ${parsed.cause || ''}`,
+    `Action: ${parsed.action || ''}`,
+    `Runbook Preview: ${runbookPreview || 'none'}`,
+    `Diagnostic Preview: ${diagnosticPreview || 'none'}`,
+    `Version Range: ${parsed.version_range || ''}`
+  ].join('\n')
+}
+
+async function loadApprovedReferenceContext(
+  db: D1Database,
+  env: Pick<Bindings, 'OPENAI_API_KEY' | 'OPENAI_BASE_URL' | 'VECTOR_DB'>,
+  rawInput: string,
+  dbms: string,
+  embeddingModel = ''
+) {
+  const apiKey = env.OPENAI_API_KEY?.trim() || ''
+  const baseUrl = env.OPENAI_BASE_URL?.trim() || 'https://api.openai.com/v1'
+  let entries: Array<Record<string, unknown>> = []
+
+  if (apiKey && env.VECTOR_DB) {
+    try {
+      const embedding = await generateEmbedding(apiKey, baseUrl, `Raw Input: ${rawInput}`, embeddingModel)
+      const matches = await env.VECTOR_DB.query(embedding, {
+        topK: 3,
+        filter: { dbms }
+      })
+
+      if (matches.matches.length > 0) {
+        const ids = matches.matches.map((match) => String(match.id))
+        const fetched = await Promise.all(ids.map((id) => getKnowledgeEntryById(db, id)))
+        entries = fetched.filter((entry): entry is Record<string, unknown> => Boolean(entry))
+      }
+    } catch (err) {
+      console.warn('Vector retrieval failed, falling back to DBMS-matched references', err)
+    }
+  }
+
+  if (entries.length === 0) {
+    const fallbackRows = await db.prepare(`
+      SELECT ke.*, i.incident_number, i.dbms, i.priority, i.dbms_version, i.raw_input
+      FROM knowledge_entry ke
+      JOIN incident i ON ke.incident_id = i.id
+      WHERE ke.status = 'approved' AND i.dbms = ?
+      ORDER BY ke.search_count DESC, ke.updated_at DESC
+      LIMIT 3
+    `).bind(dbms).all<Record<string, unknown>>()
+
+    entries = fallbackRows.results || []
+  }
+
+  return entries
+    .slice(0, 3)
+    .map((entry, idx) => formatContextSnippet(entry, idx))
+    .join('\n\n')
+}
+
 export async function generateKnowledgeDraft(
   db: D1Database,
   env: Pick<Bindings, 'OPENAI_API_KEY' | 'OPENAI_BASE_URL' | 'VECTOR_DB' | 'DB'>,
@@ -23,30 +94,7 @@ export async function generateKnowledgeDraft(
   const apiKey = env.OPENAI_API_KEY?.trim() || ''
   const baseUrl = env.OPENAI_BASE_URL?.trim() || 'https://api.openai.com/v1'
   const hasLlmConnection = Boolean(apiKey || env.OPENAI_BASE_URL?.trim())
-  let contextInfo = ''
-
-  if (apiKey && env.VECTOR_DB) {
-    try {
-      const textToEmbed = `Raw Input: ${input.rawInput}`
-      const embedding = await generateEmbedding(apiKey, baseUrl, textToEmbed, input.embeddingModel)
-      const matches = await env.VECTOR_DB.query(embedding, {
-        topK: 2,
-        filter: { dbms: input.dbms }
-      })
-
-      if (matches.matches.length > 0) {
-        const ids = matches.matches.map(m => String(m.id))
-        const entries = await Promise.all(ids.map(id => getKnowledgeEntryById(db, id)))
-        
-        contextInfo = entries
-          .filter(Boolean)
-          .map((entry: any, idx) => `[\uACFC\uAC70 \uCC38\uACE0 ${idx + 1}]\n\uC81C\uBAA9: ${entry.title}\n\uC99D\uC0C1: ${entry.symptom}\n\uC6D0\uC778: ${entry.cause}\n\uC870\uCE58: ${entry.action}\n\uB7F0\uBD81: ${entry.runbook}`)
-          .join('\n\n')
-      }
-    } catch (err) {
-      console.warn('RAG retrieval failed, proceeding without context', err)
-    }
-  }
+  const contextInfo = await loadApprovedReferenceContext(db, env, input.rawInput, input.dbms, input.embeddingModel)
 
   const knowledge: Partial<KnowledgeEntry> = hasLlmConnection
     ? await generateWithOpenAI(apiKey || 'ollama-dummy-key', baseUrl, input.rawInput, input.dbms, contextInfo, input.aiModel)
@@ -69,6 +117,7 @@ export async function generateKnowledgeDraft(
     tags: toJsonString(knowledge.tags || []),
     aliases: toJsonString(knowledge.aliases || []),
     versionRange: knowledge.version_range || '',
+    errorLog: knowledge.error_log || '',
     status: 'ai_generated',
     aiQualityScore: knowledge.ai_quality_score || 0.6,
     createdAt: now,

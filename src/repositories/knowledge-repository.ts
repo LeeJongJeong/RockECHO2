@@ -17,6 +17,7 @@ type KnowledgeUpdateInput = {
   tags?: string
   aliases?: string
   versionRange?: string
+  errorLog?: string
   status?: string
   rejectReason?: string | null
   updatedAt: string
@@ -156,6 +157,11 @@ export async function updateKnowledgeEntry(db: D1Database, id: string, updates: 
     params.push(updates.versionRange)
   }
 
+  if (updates.errorLog !== undefined) {
+    clauses.push('error_log = ?')
+    params.push(updates.errorLog)
+  }
+
   if (updates.status !== undefined) {
     clauses.push('status = ?')
     params.push(updates.status)
@@ -239,6 +245,7 @@ export async function insertKnowledgeEntry(
     tags: string
     aliases: string
     versionRange: string
+    errorLog: string
     status: string
     aiQualityScore: number
     createdAt: string
@@ -248,9 +255,9 @@ export async function insertKnowledgeEntry(
   await db.prepare(`
     INSERT OR REPLACE INTO knowledge_entry (
       id, incident_id, title, symptom, cause, cause_confidence,
-      action, runbook, diagnostic_steps, tags, aliases, version_range,
+      action, runbook, diagnostic_steps, tags, aliases, version_range, error_log,
       status, ai_quality_score, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     input.id,
     input.incidentId,
@@ -264,6 +271,7 @@ export async function insertKnowledgeEntry(
     input.tags,
     input.aliases,
     input.versionRange,
+    input.errorLog,
     input.status,
     input.aiQualityScore,
     input.createdAt,

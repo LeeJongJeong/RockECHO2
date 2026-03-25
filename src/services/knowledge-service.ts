@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { AppError } from '../lib/AppError'
 import { generateEmbedding } from '../ai/embedding'
+import { evaluateKnowledgeQuality } from '../ai/quality'
 import type { Bindings } from '../types'
 import { parseKnowledgeJsonFields, toInt, toJsonString } from '../lib/json'
 import { createActivityLog, listActivityLogsByKnowledgeEntryId } from '../repositories/activity-repository'
@@ -44,7 +45,13 @@ export async function listKnowledgeSummaries(
   ])
 
   return {
-    items: items.results.map((entry) => parseKnowledgeJsonFields(entry as Record<string, unknown>)),
+    items: items.results.map((entry) => {
+      const parsed = parseKnowledgeJsonFields(entry as Record<string, unknown>)
+      return {
+        ...parsed,
+        quality_report: evaluateKnowledgeQuality(parsed)
+      }
+    }),
     total: total?.total || 0,
     limit,
     offset
@@ -59,9 +66,11 @@ export async function getKnowledgeDetail(db: D1Database, id: string) {
 
   await incrementKnowledgeSearchCount(db, id)
   const activityLogs = await listActivityLogsByKnowledgeEntryId(db, id)
+  const parsed = parseKnowledgeJsonFields(entry as Record<string, unknown>)
 
   return {
-    ...parseKnowledgeJsonFields(entry as Record<string, unknown>),
+    ...parsed,
+    quality_report: evaluateKnowledgeQuality(parsed),
     activity_logs: activityLogs.results
   }
 }
@@ -79,6 +88,7 @@ export async function updateKnowledgeFields(
     diagnostic_steps?: unknown
     tags?: unknown
     aliases?: unknown
+    error_log?: string
     version_range?: string
     status?: string
     reject_reason?: string
@@ -99,6 +109,7 @@ export async function updateKnowledgeFields(
     diagnosticSteps: body.diagnostic_steps !== undefined ? toJsonString(body.diagnostic_steps) : undefined,
     tags: body.tags !== undefined ? toJsonString(body.tags) : undefined,
     aliases: body.aliases !== undefined ? toJsonString(body.aliases) : undefined,
+    errorLog: body.error_log,
     versionRange: body.version_range,
     status: body.status,
     rejectReason: body.reject_reason,

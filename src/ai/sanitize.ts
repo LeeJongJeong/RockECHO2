@@ -143,6 +143,94 @@ function normalizeSymptomText(value: unknown, rawInput: string, fallback: string
   return trimmed
 }
 
+const ERROR_HEADER_PATTERNS = [
+  /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}.*\b(?:ERROR|FATAL|PANIC|WARNING|WARN|CRITICAL)\b[:\]]/i,
+  /(?:^|\s)(?:ERROR|FATAL|PANIC|WARNING|WARN|CRITICAL):/i,
+  /^\[(?:ERROR|FATAL|PANIC|WARNING|WARN|CRITICAL)\]/i,
+  /\bERROR\s+\d+\s*\([A-Z0-9]+\):/i,
+  /\bORA-\d{5}\b/i,
+  /\bSQLSTATE\[[A-Z0-9]+\]/i,
+  /\bpsql:\s+error:/i,
+  /^Traceback \(most recent call last\):/i,
+  /\b[A-Za-z_$][\w.$]*Exception(?::|\b)/,
+  /\b(deadlock detected|lock wait timeout exceeded|too many connections|remaining connection slots are reserved|duplicate key value violates unique constraint|current transaction is aborted|could not serialize access due to concurrent update|server closed the connection unexpectedly|no space left on device|permission denied|connection refused|read-only transaction|out of memory|oom)\b/i
+]
+
+function looksLikeErrorLine(line: string): boolean {
+  const trimmed = line.trim()
+  if (!trimmed || trimmed.length < 8) {
+    return false
+  }
+
+  if (/^(?:증상|원인|조치|현상|확인|점검|결과|분석|추정)\s*:/i.test(trimmed)) {
+    return false
+  }
+
+  return ERROR_HEADER_PATTERNS.some((pattern) => pattern.test(trimmed))
+}
+
+function looksLikeErrorContinuation(line: string): boolean {
+  return /^(?:DETAIL:|HINT:|CONTEXT:|WHERE:|STATEMENT:|QUERY:|CALL STACK:|Caused by:|at\s+\S+|\.\.\.)/i.test(line)
+}
+
+function truncateLines(lines: string[], maxLines: number, maxLength: number): string {
+  const joined = uniqueItems(lines).slice(0, maxLines).join('\n')
+  return joined.length > maxLength ? `${joined.slice(0, maxLength - 3).trimEnd()}...` : joined
+}
+
+function extractErrorLogLines(text: string): string[] {
+  const selected: string[] = []
+  let continuationBudget = 0
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const trimmed = rawLine.trim()
+    if (!trimmed) {
+      continuationBudget = 0
+      continue
+    }
+
+    if (looksLikeErrorLine(trimmed)) {
+      selected.push(trimmed)
+      continuationBudget = 2
+      continue
+    }
+
+    if (continuationBudget > 0 && looksLikeErrorContinuation(trimmed)) {
+      selected.push(trimmed)
+      continuationBudget -= 1
+      continue
+    }
+
+    continuationBudget = 0
+  }
+
+  return uniqueItems(selected).slice(0, 8)
+}
+
+function extractErrorLogFromRawInput(rawInput: string): string {
+  return truncateLines(extractErrorLogLines(rawInput), 8, 1600)
+}
+
+function normalizeErrorLogText(value: unknown, rawInput: string): string {
+  const extractedFromRawInput = extractErrorLogFromRawInput(rawInput)
+
+  if (typeof value !== 'string') {
+    return extractedFromRawInput
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return extractedFromRawInput
+  }
+
+  const extractedFromValue = truncateLines(extractErrorLogLines(trimmed), 8, 1600)
+  if (extractedFromValue) {
+    return extractedFromValue
+  }
+
+  return extractedFromRawInput
+}
+
 function normalizeSteps(value: unknown, prefix: string, fallback: RunbookStep[]): RunbookStep[] {
   if (!Array.isArray(value) || value.length === 0) {
     return fallback
@@ -184,6 +272,7 @@ export function sanitizeKnowledge(
   const versionRange = typeof parsed.version_range === 'string' && parsed.version_range.trim()
     ? parsed.version_range.trim()
     : (useFallback ? getDefaultVersionRange(dbms) : '')
+  const errorLog = normalizeErrorLogText(parsed.error_log, rawInput)
   const rawScore = typeof parsed.ai_quality_score === 'number' ? parsed.ai_quality_score : 0.6
   const aiQualityScore = Math.min(1, Math.max(0, rawScore))
 
@@ -197,6 +286,7 @@ export function sanitizeKnowledge(
     tags,
     aliases,
     version_range: versionRange,
+    error_log: errorLog,
     ai_quality_score: aiQualityScore
   }
 }

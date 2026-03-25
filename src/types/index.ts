@@ -34,6 +34,18 @@ export interface RunbookStep {
   sql: string;
 }
 
+export interface QualityIssue {
+  code: string;
+  severity: 'error' | 'warning';
+  message: string;
+}
+
+export interface KnowledgeQualityReport {
+  score: number;
+  issues: QualityIssue[];
+  needsRepair: boolean;
+}
+
 export interface KnowledgeEntry {
   id: string;
   incident_id: string;
@@ -47,6 +59,7 @@ export interface KnowledgeEntry {
   tags?: string[];
   aliases?: string[];
   version_range?: string;
+  error_log?: string;
   status: KnowledgeStatus;
   ai_quality_score: number;
   search_count: number;
@@ -67,6 +80,7 @@ export interface KnowledgeEntry {
   relevance_score?: number;
   helpful_count?: number;
   not_helpful_count?: number;
+  quality_report?: KnowledgeQualityReport;
 }
 
 export interface SearchEvent {
