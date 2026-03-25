@@ -52,6 +52,7 @@ export async function createIncidentWithDraft(
     dbmsVersion?: string
     priority?: string
     rawInput: string
+    errorLog?: string
     createdBy?: string
   }
 ) {
@@ -71,6 +72,7 @@ export async function createIncidentWithDraft(
     dbmsVersion: input.dbmsVersion || '',
     priority: input.priority || 'p2',
     rawInput: input.rawInput,
+    errorLog: input.errorLog || '',
     createdBy,
     createdAt: now
   })

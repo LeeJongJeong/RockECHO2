@@ -19,12 +19,9 @@ export function buildSummarySystemPrompt(dbms: string): string {
     'All narrative text must be written in Korean.',
     'Keep SQL, commands, product names, identifiers, version strings, and error codes exactly as they appear.',
     'This stage only creates the concise incident summary and the operator-facing action outline.',
-    'Required keys: title, symptom, cause, action, tags, aliases, version_range, error_log, ai_quality_score.',
+    'Required keys: title, symptom, cause, action, tags, aliases, version_range, ai_quality_score.',
     'Rules:',
     '- symptom must be a concise 1 to 2 line summary of the real observed symptoms only.',
-    '- error_log must contain only exact DB error log lines, stack traces, or engine error messages found in the raw input.',
-    '- Do not include symptom summaries, engineer notes, SQL inspection results, or explanatory prose in error_log.',
-    '- If no exact DB error log lines exist, return null.',
     '- cause must explain the most likely root cause, not just restate the symptom.',
     '- action must be a Korean numbered list with at least 3 items.',
     '- tags must have 5 to 10 short keywords.',
@@ -36,11 +33,12 @@ export function buildSummarySystemPrompt(dbms: string): string {
   ].join('\n')
 }
 
-export function buildSummaryUserPrompt(rawInput: string, dbms: string, contextInfo = '', signalInfo = ''): string {
+export function buildSummaryUserPrompt(rawInput: string, errorLog: string | undefined, dbms: string, contextInfo = '', signalInfo = ''): string {
   return [
     `DBMS: ${dbms}`,
     formatContext(contextInfo),
     signalInfo ? `Extracted incident signals:\n${signalInfo}` : 'Extracted incident signals: none',
+    errorLog ? `Error Log Context:\n${errorLog}` : '',
     'Analyze the following raw incident notes and return the summary JSON for stage 1.',
     'Do not generate runbook or diagnostic_steps in this stage.',
     'Raw input:',
@@ -55,10 +53,9 @@ export function buildSummaryRepairSystemPrompt(dbms: string): string {
     `You repair RockECHO stage 1 summary output for ${dbms.toUpperCase()}.`,
     'Return one strict JSON object only.',
     'All narrative text must be in Korean.',
-    'Required keys: title, symptom, cause, action, tags, aliases, version_range, error_log, ai_quality_score.',
+    'Required keys: title, symptom, cause, action, tags, aliases, version_range, ai_quality_score.',
     'Do not add runbook or diagnostic_steps.',
     'Preserve valid technical facts, SQL, commands, identifiers, versions, and error codes.',
-    'error_log must contain only exact DB error log lines or stack-trace lines from the raw input, with no commentary.',
     'Summary focus:',
     bulletList(guide.summaryFocus)
   ].join('\n')
@@ -66,6 +63,7 @@ export function buildSummaryRepairSystemPrompt(dbms: string): string {
 
 export function buildSummaryRepairUserPrompt(
   rawInput: string,
+  errorLog: string | undefined,
   dbms: string,
   previousResponse: string,
   contextInfo = '',
@@ -75,6 +73,7 @@ export function buildSummaryRepairUserPrompt(
     `DBMS: ${dbms}`,
     formatContext(contextInfo),
     signalInfo ? `Extracted incident signals:\n${signalInfo}` : 'Extracted incident signals: none',
+    errorLog ? `Error Log Context:\n${errorLog}` : '',
     'Repair the previous stage 1 response into valid JSON with all required keys.',
     'Previous response:',
     previousResponse,

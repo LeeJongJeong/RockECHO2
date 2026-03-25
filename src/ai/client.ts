@@ -34,7 +34,6 @@ type SummaryDraft = {
   tags?: string[]
   aliases?: string[]
   version_range?: string
-  error_log?: string
   ai_quality_score?: number
 }
 
@@ -125,7 +124,6 @@ function mapSummaryFields(rawParsed: Record<string, unknown>): SummaryDraft {
     tags: (rawParsed['태그'] || rawParsed.tags) as string[] | undefined,
     aliases: (rawParsed['유사검색어'] || rawParsed.aliases) as string[] | undefined,
     version_range: (rawParsed['적용버전'] || rawParsed.version_range) as string | undefined,
-    error_log: (rawParsed['에러로그'] || rawParsed.error_log) as string | undefined,
     ai_quality_score: (rawParsed['신뢰도'] || rawParsed.ai_quality_score) as number | undefined
   }
 }
@@ -263,6 +261,7 @@ async function requestSummaryDraft(
   baseUrl: string,
   model: string,
   rawInput: string,
+  errorLog: string | undefined,
   dbms: string,
   contextInfo: string,
   signalInfo: string
@@ -271,7 +270,7 @@ async function requestSummaryDraft(
     model,
     messages: [
       { role: 'system', content: buildSummarySystemPrompt(dbms) },
-      { role: 'user', content: buildSummaryUserPrompt(rawInput, dbms, contextInfo, signalInfo) }
+      { role: 'user', content: buildSummaryUserPrompt(rawInput, errorLog, dbms, contextInfo, signalInfo) }
     ],
     temperature: 0.2,
     max_tokens: 2200,
@@ -286,7 +285,7 @@ async function requestSummaryDraft(
       model,
       messages: [
         { role: 'system', content: buildSummaryRepairSystemPrompt(dbms) },
-        { role: 'user', content: buildSummaryRepairUserPrompt(rawInput, dbms, content, contextInfo, signalInfo) }
+        { role: 'user', content: buildSummaryRepairUserPrompt(rawInput, errorLog, dbms, content, contextInfo, signalInfo) }
       ],
       temperature: 0.1,
       max_tokens: 2200,
@@ -354,7 +353,6 @@ async function requestProcedureDraft(
     cause: summaryDraft.cause,
     action: summaryDraft.action,
     version_range: summaryDraft.version_range,
-    error_log: summaryDraft.error_log,
     tags: summaryDraft.tags,
     aliases: summaryDraft.aliases
   }
@@ -457,13 +455,14 @@ export async function generateWithOpenAI(
   apiKey: string,
   baseUrl: string,
   rawInput: string,
+  errorLog: string | undefined,
   dbms: string,
   contextInfo = '',
   modelName = ''
 ): Promise<Partial<KnowledgeEntry>> {
   const model = modelName || 'gpt-4o-mini'
   const signalInfo = formatIncidentSignals(extractIncidentSignals(rawInput, dbms))
-  const summaryDraft = await requestSummaryDraft(apiKey, baseUrl, model, rawInput, dbms, contextInfo, signalInfo)
+  const summaryDraft = await requestSummaryDraft(apiKey, baseUrl, model, rawInput, errorLog, dbms, contextInfo, signalInfo)
   const fullDraft = await requestProcedureDraft(apiKey, baseUrl, model, rawInput, dbms, contextInfo, summaryDraft, signalInfo)
 
   return sanitizeKnowledge(fullDraft as Record<string, unknown>, rawInput, dbms, { useFallback: false })

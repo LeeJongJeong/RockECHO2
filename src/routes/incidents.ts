@@ -34,7 +34,7 @@ incidentRoutes.get('/:id', async (c) => {
 incidentRoutes.post('/', async (c) => {
   try {
     const body = await c.req.json()
-    const { dbms, dbms_version, priority, raw_input, created_by = 'user-004' } = body
+    const { dbms, dbms_version, priority, raw_input, error_log, created_by = 'user-004' } = body
 
     if (!dbms || !raw_input) {
       return c.json({ error: 'dbms and raw_input are required' }, 400)
@@ -45,6 +45,7 @@ incidentRoutes.post('/', async (c) => {
       dbmsVersion: dbms_version,
       priority,
       rawInput: raw_input,
+      errorLog: error_log,
       createdBy: created_by
     })
 

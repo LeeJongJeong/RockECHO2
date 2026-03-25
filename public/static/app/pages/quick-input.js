@@ -110,18 +110,30 @@ export function renderQuickInput(prefill = '') {
     });
     card.appendChild(versionInput);
 
-    card.appendChild(fieldLabel('장애 내용 입력 *', '에러 로그, SQL, 증상 무엇이든'));
+    card.appendChild(fieldLabel('에러 로그 / SQL 에러 메시지 (Error Log)', '가공 없이 원문 그대로 붙여넣기'));
+    const errorLogInput = h('textarea', {
+      className: 'input-field mb-5 font-mono text-sm bg-gray-50',
+      rows: '5',
+      placeholder: '예시:\nLock wait timeout exceeded; try restarting transaction\n또는 긴 자바스택 트레이스...'
+    });
+    errorLogInput.value = incidentData.error_log || '';
+    errorLogInput.addEventListener('input', (event) => {
+      incidentData.error_log = event.target.value;
+    });
+    card.appendChild(errorLogInput);
+
+    card.appendChild(fieldLabel('현황 및 조치 내용 (Engineer Notes) *', '증상, 원인 추정, 조치 내역'));
     card.appendChild(h('div', { className: 'mb-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 flex items-start gap-2' },
       h('i', { className: 'fas fa-lightbulb mt-0.5 text-xs' }),
-      h('span', {}, '에러 로그, SQL 결과, 조치 내용 등 raw 텍스트 자유 입력. RockECHO AI가 구조화합니다.')
+      h('span', {}, '현재 파악된 증상과 시도한 조치 내역을 편하게 기록하세요. (이 노트와 에러 로그 기록을 기반으로 AI가 최종 초안을 작성합니다.)')
     ));
 
     const rawInput = h('textarea', {
       className: 'input-field',
-      rows: '9',
-      placeholder: '예시:\npg_stat_user_tables에서 n_dead_tup이 5,234,891건 발생\nautovacuum: found orphan temp table "pg_temp_3"."tt_work_123" in database\nlast_autovacuum: 2025-03-01 (3일 전)\nVACUUM VERBOSE 실행 후 해결됨'
+      rows: '6',
+      placeholder: '예시:\npg_stat_user_tables에서 n_dead_tup이 5,234,891건 발생 확인.\n임시 조치로 해당 테이블에 대해 수동 VACUUM ANALYZE 실행함.'
     });
-    rawInput.value = incidentData.raw_input;
+    rawInput.value = incidentData.raw_input || '';
     rawInput.addEventListener('input', (event) => {
       incidentData.raw_input = event.target.value;
     });
@@ -147,6 +159,7 @@ export function renderQuickInput(prefill = '') {
               dbms_version: incidentData.dbms_version,
               priority: incidentData.priority,
               raw_input: incidentData.raw_input,
+              error_log: incidentData.error_log || '',
               created_by: CURRENT_USER.id
             });
             createdIncidentId = result.id;
@@ -180,6 +193,7 @@ export function renderQuickInput(prefill = '') {
       knowledgeEntry = await api('POST', '/api/ai/generate', {
         incident_id: createdIncidentId,
         raw_input: incidentData.raw_input,
+        error_log: incidentData.error_log || '',
         dbms: incidentData.dbms,
         user_id: CURRENT_USER.id
       });

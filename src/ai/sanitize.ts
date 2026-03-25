@@ -212,23 +212,13 @@ function extractErrorLogFromRawInput(rawInput: string): string {
 }
 
 function normalizeErrorLogText(value: unknown, rawInput: string): string {
-  const extractedFromRawInput = extractErrorLogFromRawInput(rawInput)
-
-  if (typeof value !== 'string') {
-    return extractedFromRawInput
+  // If a manual error_log was explicitly provided, preserve it as-is (pass-through)
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim()
   }
 
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return extractedFromRawInput
-  }
-
-  const extractedFromValue = truncateLines(extractErrorLogLines(trimmed), 8, 1600)
-  if (extractedFromValue) {
-    return extractedFromValue
-  }
-
-  return extractedFromRawInput
+  // Fallback: try to extract error lines from raw input using pattern matching
+  return extractErrorLogFromRawInput(rawInput)
 }
 
 function normalizeSteps(value: unknown, prefix: string, fallback: RunbookStep[]): RunbookStep[] {

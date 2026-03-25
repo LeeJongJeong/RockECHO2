@@ -9,7 +9,7 @@ aiRoutes.get('/local-models', async (c) => {
   try {
     const baseUrl = c.req.query('baseUrl') || 'http://127.0.0.1:11434/v1'
     const ollamaUrl = baseUrl.replace(/\/v1\/?$/, '') + '/api/tags'
-    
+
     // Only fetch from localhost or internal IP for security
     const res = await fetch(ollamaUrl)
     if (!res.ok) throw new Error('Ollama server returned ' + res.status)
@@ -24,7 +24,7 @@ aiRoutes.get('/local-models', async (c) => {
 
 aiRoutes.post('/generate', async (c) => {
   try {
-    const { incident_id, raw_input, dbms, user_id } = await c.req.json()
+    const { incident_id, raw_input, error_log, dbms, user_id } = await c.req.json()
 
     if (!incident_id || !raw_input || !dbms) {
       return c.json({ error: 'incident_id, raw_input, dbms are required' }, 400)
@@ -51,6 +51,7 @@ aiRoutes.post('/generate', async (c) => {
     const entry = await generateKnowledgeDraft(c.env.DB, overrideEnv, {
       incidentId: incident_id,
       rawInput: raw_input,
+      errorLog: error_log,
       dbms,
       userId: user_id,
       aiModel,

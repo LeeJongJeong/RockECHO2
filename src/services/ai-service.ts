@@ -85,6 +85,7 @@ export async function generateKnowledgeDraft(
   input: {
     incidentId: string
     rawInput: string
+    errorLog?: string
     dbms: string
     userId?: string
     aiModel?: string
@@ -97,7 +98,7 @@ export async function generateKnowledgeDraft(
   const contextInfo = await loadApprovedReferenceContext(db, env, input.rawInput, input.dbms, input.embeddingModel)
 
   const knowledge: Partial<KnowledgeEntry> = hasLlmConnection
-    ? await generateWithOpenAI(apiKey || 'ollama-dummy-key', baseUrl, input.rawInput, input.dbms, contextInfo, input.aiModel)
+    ? await generateWithOpenAI(apiKey || 'ollama-dummy-key', baseUrl, input.rawInput, input.errorLog, input.dbms, contextInfo, input.aiModel)
     : sanitizeKnowledge(generateFallback(input.rawInput, input.dbms), input.rawInput, input.dbms)
 
   const stub = await db.prepare("SELECT id FROM knowledge_entry WHERE incident_id = ? AND status = 'raw_input'").bind(input.incidentId).first<{ id: string }>()
@@ -117,7 +118,7 @@ export async function generateKnowledgeDraft(
     tags: toJsonString(knowledge.tags || []),
     aliases: toJsonString(knowledge.aliases || []),
     versionRange: knowledge.version_range || '',
-    errorLog: knowledge.error_log || '',
+    errorLog: input.errorLog || '',
     status: 'ai_generated',
     aiQualityScore: knowledge.ai_quality_score || 0.6,
     createdAt: now,

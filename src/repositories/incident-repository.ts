@@ -79,13 +79,14 @@ export async function insertIncident(
     dbmsVersion: string
     priority: string
     rawInput: string
+    errorLog?: string
     createdBy: string
     createdAt: string
   }
 ) {
   await db.prepare(`
-    INSERT INTO incident (id, incident_number, dbms, dbms_version, priority, raw_input, created_by, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO incident (id, incident_number, dbms, dbms_version, priority, raw_input, error_log, created_by, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     input.id,
     input.incidentNumber,
@@ -93,6 +94,7 @@ export async function insertIncident(
     input.dbmsVersion,
     input.priority,
     input.rawInput,
+    input.errorLog || null,
     input.createdBy,
     input.createdAt
   ).run()
