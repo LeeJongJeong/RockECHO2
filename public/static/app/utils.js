@@ -7,6 +7,15 @@ export function h(tag, attrs = {}, ...children) {
       el.className = v;
     } else if (k === 'innerHTML') {
       el.innerHTML = v;
+    } else if (typeof v === 'boolean') {
+      if (k in el) {
+        el[k] = v;
+      }
+      if (v) {
+        el.setAttribute(k, '');
+      } else {
+        el.removeAttribute(k);
+      }
     } else if (v !== null && v !== undefined) {
       el.setAttribute(k, v);
     }
@@ -62,4 +71,4 @@ export function copyText(text, label) {
 
 export function parseTags(value) {
   return value.split(',').map((tag) => tag.trim()).filter(Boolean);
-}
+}

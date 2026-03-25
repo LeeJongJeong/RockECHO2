@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid'
 import type { Bindings, KnowledgeEntry } from '../types'
 import { generateWithOpenAI } from '../ai/client'
 import { generateFallback } from '../ai/fallback'
+import { sanitizeKnowledge } from '../ai/sanitize'
 import { parseKnowledgeJsonFields, toJsonString } from '../lib/json'
 import { createActivityLog } from '../repositories/activity-repository'
 import { getKnowledgeEntryById, insertKnowledgeEntry } from '../repositories/knowledge-repository'
@@ -19,8 +20,9 @@ export async function generateKnowledgeDraft(
     embeddingModel?: string
   }
 ) {
-  const apiKey = env.OPENAI_API_KEY
-  const baseUrl = env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
+  const apiKey = env.OPENAI_API_KEY?.trim() || ''
+  const baseUrl = env.OPENAI_BASE_URL?.trim() || 'https://api.openai.com/v1'
+  const hasLlmConnection = Boolean(apiKey || env.OPENAI_BASE_URL?.trim())
   let contextInfo = ''
 
   if (apiKey && env.VECTOR_DB) {
@@ -46,11 +48,12 @@ export async function generateKnowledgeDraft(
     }
   }
 
-  const knowledge: Partial<KnowledgeEntry> = apiKey
-    ? await generateWithOpenAI(apiKey, baseUrl, input.rawInput, input.dbms, contextInfo, input.aiModel)
-    : generateFallback(input.rawInput, input.dbms)
+  const knowledge: Partial<KnowledgeEntry> = hasLlmConnection
+    ? await generateWithOpenAI(apiKey || 'ollama-dummy-key', baseUrl, input.rawInput, input.dbms, contextInfo, input.aiModel)
+    : sanitizeKnowledge(generateFallback(input.rawInput, input.dbms), input.rawInput, input.dbms)
 
-  const id = uuidv4()
+  const stub = await db.prepare("SELECT id FROM knowledge_entry WHERE incident_id = ? AND status = 'raw_input'").bind(input.incidentId).first<{ id: string }>()
+  const id = stub?.id || uuidv4()
   const now = new Date().toISOString()
 
   await insertKnowledgeEntry(db, {

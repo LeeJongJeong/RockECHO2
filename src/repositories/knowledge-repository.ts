@@ -246,7 +246,7 @@ export async function insertKnowledgeEntry(
   }
 ) {
   await db.prepare(`
-    INSERT INTO knowledge_entry (
+    INSERT OR REPLACE INTO knowledge_entry (
       id, incident_id, title, symptom, cause, cause_confidence,
       action, runbook, diagnostic_steps, tags, aliases, version_range,
       status, ai_quality_score, created_at, updated_at

@@ -42,10 +42,16 @@ knowledgeRoutes.patch('/:id', async (c) => {
 })
 
 knowledgeRoutes.post('/:id/approve', async (c) => {
-  const { user_id = 'user-003' } = await c.req.json().catch(() => ({}))
-  const { env, embeddingModel } = getAiEnv(c)
-  const result = await approveKnowledgeEntry(env, c.req.param('id'), user_id, embeddingModel)
-  return c.json(result)
+  try {
+    const { user_id = 'user-003' } = await c.req.json().catch(() => ({}))
+    const { env, embeddingModel } = getAiEnv(c)
+    const result = await approveKnowledgeEntry(env, c.req.param('id'), user_id, embeddingModel)
+    return c.json(result)
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(getErrorMessage(err))
+    console.error('Approve failed:', error.message, error.stack)
+    throw err
+  }
 })
 
 knowledgeRoutes.post('/:id/reject', async (c) => {

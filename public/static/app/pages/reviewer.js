@@ -6,10 +6,11 @@ import {
   PRIORITY_LABELS,
   PRIORITY_COLORS
 } from '../state.js';
-import { h, timeAgo, formatDate, showNotification, showModal } from '../utils.js';
+import { h, timeAgo, formatDate, showNotification } from '../utils.js';
 import { navigate } from '../router.js';
 import { kpiCard } from '../components/KpiCard.js';
 import { queueRow, REVIEWER_STATUS } from '../components/QueueRow.js';
+import { renderSqlList } from '../components/SqlList.js';
 
 function parseDbDate(value) {
   return new Date(String(value || '').replace(' ', 'T'));
@@ -27,117 +28,43 @@ function countTodayApprovals(logs) {
   }).length;
 }
 
-
-
-async function openReviewModal(id, onCompleted) {
-  const overlay = showModal(h('div', { className: 'text-center py-8 text-gray-400' },
-    h('i', { className: 'fas fa-spinner fa-spin text-2xl' })
-  ));
-  const modalContent = overlay.querySelector('.modal-content');
-
-  try {
-    const entry = await api('GET', `/api/knowledge/${id}`);
-    const status = REVIEWER_STATUS[entry.status] || REVIEWER_STATUS.raw_input;
-    modalContent.innerHTML = '';
-
-    const body = h('div', {},
-      h('div', { className: 'mb-4' },
-        h('div', { className: 'flex items-center gap-2 flex-wrap mb-2' },
-          h('span', { className: `text-xs px-2 py-0.5 rounded-full font-medium ${DBMS_COLORS[entry.dbms] || 'bg-gray-100 text-gray-600'}` }, DBMS_LABELS[entry.dbms] || entry.dbms || '미상 DBMS'),
-          h('span', { className: `text-xs px-2 py-0.5 rounded-full font-medium ${PRIORITY_COLORS[entry.priority] || 'bg-gray-100 text-gray-600'}` }, PRIORITY_LABELS[entry.priority] || entry.priority || 'P2'),
-          h('span', { className: `text-xs px-2 py-0.5 rounded-full font-medium ${status.className}` }, status.label)
-        ),
-        h('h2', { className: 'text-lg font-semibold text-gray-900 leading-7' }, entry.title || '제목 없는 지식 항목'),
-        h('p', { className: 'text-xs text-gray-400 mt-1' }, entry.incident_number || '-')
-      )
-    );
-
-    if (!entry.version_range && entry.status !== 'approved') {
-      body.appendChild(h('div', { className: 'bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 mb-4 text-xs text-orange-600 flex items-center gap-2' },
-        h('i', { className: 'fas fa-triangle-exclamation' }),
-        '버전 범위가 없어서 바로 승인할 수 없습니다.'
-      ));
-    }
-
-    const fields = [
-      ['증상', entry.symptom],
-      ['원인', entry.cause],
-      ['조치', entry.action],
-      ['적용 버전 범위', entry.version_range]
-    ];
-
-    fields.forEach(([label, value]) => {
-      if (!value) return;
-      body.appendChild(h('div', { className: 'mb-3' },
-        h('p', { className: 'text-xs font-medium text-gray-500 mb-1' }, label),
-        h('p', { className: 'text-sm text-gray-700 whitespace-pre-wrap leading-6' }, value)
-      ));
-    });
-
-    if (entry.activity_logs?.length > 0) {
-      body.appendChild(h('h3', { className: 'text-xs font-medium text-gray-500 mt-4 mb-2' }, '최근 활동'));
-      entry.activity_logs.slice(-4).forEach((log) => {
-        body.appendChild(h('div', { className: 'flex gap-2 text-xs text-gray-500 mb-1' },
-          h('span', {}, formatDate(log.created_at)),
-          h('span', { className: 'font-medium text-gray-600' }, `${log.user_name || 'System'}: ${log.action}`)
-        ));
-      });
-    }
-
-    const actions = h('div', { className: 'flex gap-2 mt-6 flex-wrap' });
-
-    if (entry.status !== 'approved') {
-      actions.appendChild(h('button', {
-        className: 'btn-success text-sm flex items-center gap-2',
-        disabled: !entry.version_range,
-        style: !entry.version_range ? 'opacity:0.5;cursor:not-allowed' : '',
-        onClick: async () => {
-          if (!entry.version_range) return;
-          await api('POST', `/api/knowledge/${id}/approve`, { user_id: CURRENT_USER.id });
-          showNotification('승인했습니다', 'success');
-          overlay.remove();
-          await onCompleted();
-        }
-      },
-        h('i', { className: 'fas fa-check' }),
-        '승인'
-      ));
-
-      actions.appendChild(h('button', {
-        className: 'btn-danger text-sm flex items-center gap-2',
-        onClick: async () => {
-          const reason = prompt('반려 사유를 입력하세요');
-          if (!reason) return;
-          await api('POST', `/api/knowledge/${id}/reject`, { user_id: CURRENT_USER.id, reason });
-          showNotification('반려했습니다', 'info');
-          overlay.remove();
-          await onCompleted();
-        }
-      },
-        h('i', { className: 'fas fa-times' }),
-        '반려'
-      ));
-    }
-
-    actions.appendChild(h('button', {
-      className: 'btn-secondary text-sm',
-      onClick: () => {
-        overlay.remove();
-        navigate('knowledge-detail', { id });
-      }
-    }, '상세 보기'));
-
-    actions.appendChild(h('button', {
-      className: 'btn-secondary text-sm',
-      onClick: () => overlay.remove()
-    }, '닫기'));
-
-    body.appendChild(actions);
-    modalContent.appendChild(body);
-  } catch (error) {
-    modalContent.innerHTML = `<div class="text-red-500 text-sm">Reviewer 상세를 불러오지 못했습니다: ${error.message}</div>`;
-  }
+// Local component for detail sections
+function detailSection(title, content) {
+  const card = h('div', { className: 'bg-slate-50 border border-slate-100 rounded-lg p-5 mb-4 shadow-sm' },
+    h('h3', { className: 'text-[12px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2' },
+      h('span', { className: 'w-1 h-3 rounded-full bg-indigo-500' }),
+      title
+    ),
+    h('div', { 
+      className: 'text-[14px] leading-relaxed text-slate-700 whitespace-pre-wrap',
+      innerHTML: content || '<span class="text-slate-400 italic">내용 없음</span>'
+    })
+  );
+  return card;
 }
+
+function editSection(title, key, buffer) {
+  const card = h('div', { className: 'bg-white border border-indigo-200 rounded-lg p-5 mb-4 shadow-sm ring-1 ring-indigo-50' },
+    h('h3', { className: 'text-[12px] font-bold text-indigo-600 uppercase tracking-widest mb-3 flex items-center gap-2' },
+      h('i', { className: 'fas fa-pen text-[10px]' }),
+      title
+    )
+  );
+  const rows = key === 'action' ? '8' : key === 'version_range' ? '1' : '5';
+  const textarea = h('textarea', {
+    className: 'w-full p-3 text-[14px] leading-relaxed text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow',
+    rows: rows
+  });
+  textarea.value = buffer[key] || '';
+  textarea.addEventListener('input', (e) => {
+    buffer[key] = e.target.value;
+  });
+  card.appendChild(textarea);
+  return card;
+}
+
+let selectedId = null;
+let activeTab = 'reviewed';
 
 export async function renderReviewer() {
   const main = document.querySelector('.main-content');
@@ -155,118 +82,360 @@ export async function renderReviewer() {
     const todayApprovedCount = countTodayApprovals(auditLog.items || []);
     main.innerHTML = '';
 
-    const container = h('div', { className: 'p-6' });
-    container.appendChild(h('div', { className: 'flex items-start justify-between mb-6' },
-      h('h1', { className: 'text-2xl font-bold text-gray-900' }, 'Reviewer Dashboard'),
-      h('p', { className: 'text-sm text-gray-400 mt-1' }, '품질 검증 및 승인 관리')
+    const container = h('div', { className: 'p-8 flex flex-col h-full' });
+    
+    // Header
+    container.appendChild(h('div', { className: 'flex items-start justify-between mb-8 shrink-0' },
+      h('div', {},
+        h('h1', { className: 'text-3xl font-extrabold text-slate-900 tracking-tight' }, 'Reviewer Dashboard'),
+        h('p', { className: 'text-sm mt-2 text-slate-500 font-medium' }, '장애 지식 품질 검증 및 승인 마스터 패널')
+      )
     ));
 
+    // KPI Cards
     const kpis = [
       {
         label: '검토 대기',
         value: stats.reviewed_count || 0,
         sub: '현재 reviewed 상태',
-        color: 'text-blue-600',
-        bg: 'bg-blue-100',
+        color: 'text-indigo-600',
+        bg: 'bg-indigo-50',
         icon: 'fa-clock'
       },
       {
         label: '오늘 승인',
         value: todayApprovedCount,
         sub: `이번 주 처리 ${stats.reviewer_activity_week || 0}건`,
-        color: 'text-green-600',
-        bg: 'bg-green-100',
+        color: 'text-emerald-600',
+        bg: 'bg-emerald-50',
         icon: 'fa-circle-check'
       },
       {
         label: 'AI 초안 승인율',
         value: `${stats.ai_approval_rate || 0}%`,
         sub: '목표 70% 이상',
-        color: 'text-purple-600',
-        bg: 'bg-purple-100',
+        color: 'text-violet-600',
+        bg: 'bg-violet-50',
         icon: 'fa-robot'
       },
       {
         label: '재검토 필요',
         value: stats.needs_review_count || 0,
         sub: (stats.needs_review_count || 0) > 0 ? '즉시 확인 필요' : '현재 없음',
-        color: 'text-orange-600',
-        bg: 'bg-orange-100',
+        color: 'text-rose-600',
+        bg: 'bg-rose-50',
         icon: 'fa-triangle-exclamation'
       }
     ];
 
-    const kpiGrid = h('div', { className: 'grid grid-cols-4 gap-4 mb-6' });
+    const kpiGrid = h('div', { className: 'grid grid-cols-4 gap-5 mb-8 shrink-0' });
     kpis.forEach((item) => kpiGrid.appendChild(kpiCard(item)));
     container.appendChild(kpiGrid);
 
+    // Split Layout Container
+    const splitLayout = h('div', { className: 'flex gap-6 flex-1 min-h-[600px] max-h-[800px]' });
+
+    // Left Pane (List Area)
+    const leftPane = h('div', { className: 'w-1/3 flex flex-col bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden' });
+    
     const tabs = [
-      { id: 'reviewed', label: `검토 대기 (${reviewed.total})`, items: reviewed.items },
-      { id: 'needs_review', label: `재검토 필요 (${needsReview.total})`, items: needsReview.items },
-      { id: 'all', label: `전체 이력 (${allItems.total})`, items: allItems.items }
+      { id: 'reviewed', label: `대기 (${reviewed.total})`, items: reviewed.items },
+      { id: 'needs_review', label: `재검토 (${needsReview.total})`, items: needsReview.items },
+      { id: 'all', label: `전체 (${allItems.total})`, items: allItems.items }
     ];
-    let activeTab = 'reviewed';
 
-    const tabsEl = h('div', { className: 'flex gap-2 mb-4 flex-wrap' });
-    const body = h('div', { id: 'reviewer-body' });
+    const tabsContainer = h('div', { className: 'flex flex-wrap border-b border-slate-200 bg-slate-50 shrink-0 px-2 pt-2' });
+    const listContainer = h('div', { className: 'flex-1 overflow-y-auto p-4 space-y-3' });
 
-    function renderTabs() {
-      tabsEl.innerHTML = '';
+    function renderList() {
+      tabsContainer.innerHTML = '';
       tabs.forEach((tab) => {
-        tabsEl.appendChild(h('button', {
-          className: `px-4 py-2 text-sm font-medium rounded-lg border transition-all ${activeTab === tab.id ? 'bg-white border-gray-200 text-indigo-600 shadow-sm' : 'bg-gray-100 border-transparent text-gray-500 hover:text-gray-700'}`,
+        const isActive = activeTab === tab.id;
+        tabsContainer.appendChild(h('button', {
+          className: `flex-1 py-3 text-[13px] font-bold uppercase tracking-wider border-b-2 transition-colors ${isActive ? 'border-indigo-600 text-indigo-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`,
           onClick: () => {
             activeTab = tab.id;
-            renderTabs();
-            renderBody();
+            selectedId = null; // Tab 변경 시 선택 항목 포맷
+            renderList();
+            renderRightPane();
           }
         }, tab.label));
       });
-    }
 
-    function renderBody() {
       const currentItems = tabs.find((tab) => tab.id === activeTab)?.items || [];
-      body.innerHTML = '';
+      listContainer.innerHTML = '';
 
-      if (activeTab === 'reviewed') {
-        body.appendChild(h('button', {
-          className: 'btn-success text-sm mb-3 flex items-center gap-2',
+      if (activeTab === 'reviewed' && currentItems.length > 0) {
+        listContainer.appendChild(h('button', {
+          className: 'w-full py-2.5 mb-3 bg-indigo-50 text-indigo-700 text-sm font-bold rounded-lg border border-indigo-100 hover:bg-indigo-100 transition-colors flex justify-center items-center gap-2',
           onClick: async () => {
             const ids = currentItems.filter((item) => item.version_range).map((item) => item.id);
             if (!ids.length) {
-              showNotification('버전 범위가 있는 검토 대기 항목이 없습니다', 'warning');
+              showNotification('버전 범위가 기입된 승인 대기 항목이 없습니다', 'warning');
               return;
             }
-            const result = await api('POST', '/api/knowledge/bulk-approve', { ids, user_id: CURRENT_USER.id });
-            const successCount = result.results.filter((item) => item.success).length;
-            showNotification(`${successCount}건 승인했습니다`, 'success');
-            await renderReviewer();
+            try {
+              const result = await api('POST', '/api/knowledge/bulk-approve', { ids, user_id: CURRENT_USER.id });
+              const successCount = result.results.filter((item) => item.success).length;
+              showNotification(`${successCount}건을 안정적으로 일괄 승인했습니다.`, 'success');
+              await renderReviewer();
+            } catch (err) {
+              showNotification('일괄 승인 실패: ' + err.message, 'error');
+            }
           }
-        },
-          h('i', { className: 'fas fa-check-double' }),
-          '일괄 승인 (버전 범위 있는 항목만)'
-        ));
+        }, h('i', { className: 'fas fa-check-double' }), '검증 완료 항목 일괄 승인'));
       }
 
       if (!currentItems.length) {
-        body.appendChild(h('div', { className: 'card text-center py-10 text-gray-400' },
-          h('i', { className: 'fas fa-inbox text-4xl mb-3' }),
-          h('p', { className: 'text-sm' }, '현재 이 탭에 표시할 항목이 없습니다.')
+        listContainer.appendChild(h('div', { className: 'text-center py-16 text-slate-400' },
+          h('i', { className: 'fas fa-inbox text-5xl mb-4 text-slate-200' }),
+          h('p', { className: 'text-sm font-medium' }, '표시할 항목이 없습니다.')
+        ));
+      } else {
+        currentItems.forEach((item) => {
+          const row = queueRow(item, async (id) => {
+            selectedId = id;
+            renderList();
+            renderRightPane();
+          });
+          
+          if (item.id === selectedId) {
+            row.classList.add('ring-2', 'ring-indigo-500', 'bg-indigo-50/50');
+          }
+          listContainer.appendChild(row);
+        });
+      }
+    }
+
+    leftPane.appendChild(tabsContainer);
+    leftPane.appendChild(listContainer);
+    splitLayout.appendChild(leftPane);
+
+    // Right Pane (Detail Area)
+    const rightPane = h('div', { className: 'w-2/3 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col relative overflow-hidden' });
+    
+    async function renderRightPane() {
+      rightPane.innerHTML = '';
+
+      if (!selectedId) {
+        rightPane.appendChild(h('div', { className: 'flex-1 flex flex-col items-center justify-center text-slate-400 p-8 text-center' },
+          h('div', { className: 'w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6 border border-slate-100 shadow-inner' },
+            h('i', { className: 'fas fa-file-contract text-4xl text-slate-300' })
+          ),
+          h('h2', { className: 'text-xl font-bold text-slate-600 mb-2' }, '항목을 선택하세요'),
+          h('p', { className: 'text-[15px] max-w-sm' }, '좌측 대기열에서 검토할 항목을 클릭하면, 엔지니어의 원본 데이터와 AI가 구조화한 조치 내역을 상세히 비교 및 승인할 수 있습니다.')
         ));
         return;
       }
 
-      currentItems.forEach((item) => {
-        body.appendChild(queueRow(item, (id) => openReviewModal(id, renderReviewer)));
-      });
+      rightPane.innerHTML = '<div class="absolute inset-0 flex flex-col items-center justify-center bg-white/90 z-10 backdrop-blur-sm"><i class="fas fa-circle-notch fa-spin text-4xl text-indigo-500 mb-4"></i><p class="text-indigo-900 font-medium shadow-sm">데이터 로딩 중...</p></div>';
+
+      try {
+        const entry = await api('GET', `/api/knowledge/${selectedId}`);
+        const status = REVIEWER_STATUS[entry.status] || REVIEWER_STATUS.raw_input;
+        rightPane.innerHTML = '';
+
+        let isEditing = false;
+        let editBuffer = {
+          symptom: entry.symptom || '',
+          cause: entry.cause || '',
+          action: entry.action || '',
+          version_range: entry.version_range || ''
+        };
+
+        const contentArea = h('div', { className: 'flex-1 overflow-y-auto p-8 bg-white' });
+        const footer = h('div', { className: 'shrink-0 px-8 py-5 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]' });
+
+        function repaintDetail() {
+          contentArea.innerHTML = '';
+          footer.innerHTML = '';
+
+          // Detail Header
+          contentArea.appendChild(h('div', { className: 'mb-8 border-b border-slate-200 pb-6' },
+            h('div', { className: 'flex items-center gap-3 flex-wrap mb-4' },
+              h('span', { className: `text-xs px-3 py-1 rounded-md font-bold uppercase tracking-wider shadow-sm ${DBMS_COLORS[entry.dbms] || 'bg-slate-100 text-slate-600'}` }, DBMS_LABELS[entry.dbms] || entry.dbms || '미상 DBMS'),
+              h('span', { className: `text-xs px-3 py-1 rounded-md font-bold uppercase tracking-wider shadow-sm ${PRIORITY_COLORS[entry.priority] || 'bg-slate-100 text-slate-600'}` }, PRIORITY_LABELS[entry.priority] || entry.priority || 'P2'),
+              h('span', { className: `text-xs px-3 py-1 rounded-md font-bold shadow-sm ${status.className}` }, status.label),
+              h('span', { className: 'text-xs text-slate-400 font-medium ml-auto tracking-wide' }, entry.incident_number || '-')
+            ),
+            h('h2', { className: 'text-3xl font-extrabold text-slate-900 tracking-tight leading-snug mb-3' }, entry.title || '제목 없음'),
+            h('div', { className: 'flex gap-3 text-sm font-medium text-slate-500' },
+              h('span', {}, h('i', { className: 'fa-regular fa-square-plus mr-1.5' }), `등록자: ${entry.creator_name || 'System'}`),
+              h('span', {}, '\u00B7'),
+              h('span', {}, h('i', { className: 'fa-regular fa-clock mr-1.5' }), `업데이트: ${timeAgo(entry.updated_at)}`)
+            )
+          ));
+
+          if (!entry.version_range && entry.status !== 'approved' && !isEditing) {
+            contentArea.appendChild(h('div', { className: 'bg-orange-50 border border-orange-200 rounded-lg px-5 py-4 mb-6 text-[15px] font-medium text-orange-700 flex items-center gap-4 shadow-sm' },
+              h('i', { className: 'fas fa-triangle-exclamation text-orange-500 text-2xl' }),
+              '경고: 버전 범위(Version Range)가 누락되어 있습니다. 초안 수정을 눌러 버전을 지시해야 최종 승인할 수 있습니다.'
+            ));
+          }
+
+          // Detail Sections
+          if (isEditing) {
+            contentArea.appendChild(h('div', { className: 'mb-4 p-4 bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-lg flex items-center gap-3' }, 
+              h('i', { className: 'fas fa-pen-fancy text-xl' }),
+              '초안 편집 모드: 기술된 내용을 전문가의 시각으로 직접 보완해주세요.'
+            ));
+            if (entry.raw_input) {
+              contentArea.appendChild(detailSection('엔지니어 원본 입력 (수정 불가)', entry.raw_input));
+            }
+            contentArea.appendChild(editSection('초안 증상 (Symptom)', 'symptom', editBuffer));
+            contentArea.appendChild(editSection('근본 원인 (Cause)', 'cause', editBuffer));
+            contentArea.appendChild(editSection('대응 조치 및 방안 (Action)', 'action', editBuffer));
+            contentArea.appendChild(editSection('적용 버전 (Version Range)', 'version_range', editBuffer));
+          } else {
+            if (entry.raw_input) {
+              contentArea.appendChild(detailSection('엔지니어 원본 입력 (Raw Input)', entry.raw_input));
+            }
+            contentArea.appendChild(detailSection('초안 증상 (Symptom)', entry.symptom));
+            contentArea.appendChild(detailSection('근본 원인 (Cause)', entry.cause));
+            contentArea.appendChild(detailSection('대응 조치 및 방안 (Action)', entry.action));
+            contentArea.appendChild(detailSection('적용 버전 (Version Range)', entry.version_range || '[미지정]'));
+
+            contentArea.appendChild(
+              Array.isArray(entry.runbook) && entry.runbook.length > 0
+                ? renderSqlList('Runbook', entry.runbook)
+                : detailSection('Runbook', '[미지정]')
+            );
+            contentArea.appendChild(
+              Array.isArray(entry.diagnostic_steps) && entry.diagnostic_steps.length > 0
+                ? renderSqlList('Diagnostic Steps', entry.diagnostic_steps)
+                : detailSection('Diagnostic Steps', '[미지정]')
+            );
+
+            // Activity Logs (Only show when not editing relative to avoid clutter)
+            if (entry.activity_logs?.length > 0) {
+              const logSection = h('div', { className: 'mt-10 border-t border-slate-200 pt-8' });
+              logSection.appendChild(h('h3', { className: 'text-[13px] font-bold text-slate-400 uppercase tracking-widest mb-5' }, '레코드 감사 로그 (Audit Trail)'));
+              const logList = h('ul', { className: 'space-y-4' });
+              entry.activity_logs.slice(0, 7).forEach((log) => {
+                logList.appendChild(h('li', { className: 'flex items-start gap-4 text-sm' },
+                  h('div', { className: 'mt-1.5 w-2 h-2 rounded-full ring-4 ring-indigo-50 bg-indigo-500' }),
+                  h('div', { className: 'bg-slate-50 border border-slate-100 rounded-md px-3 py-2 flex-1' },
+                    h('p', { className: 'font-semibold text-slate-700 uppercase tracking-wide text-xs' }, `${log.user_name || 'System'}`),
+                    h('p', { className: 'text-slate-600 mt-1 font-medium' }, log.action),
+                    h('p', { className: 'text-[11px] text-slate-400 mt-1' }, formatDate(log.created_at))
+                  )
+                ));
+              });
+              logSection.appendChild(logList);
+              contentArea.appendChild(logSection);
+            }
+          }
+
+          // Sticky Footer Rendering
+          const leftActions = h('div', { className: 'flex gap-3' });
+          const rightActions = h('div', { className: 'flex gap-3' });
+          
+          if (isEditing) {
+            footer.className = 'shrink-0 px-8 py-4 bg-indigo-50 border-t border-indigo-200 flex items-center justify-between shadow-[0_-4px_6px_-1px_rgba(79,70,229,0.1)]';
+            leftActions.appendChild(h('button', {
+              className: 'px-5 py-2.5 bg-white border border-slate-300 text-slate-600 text-[14px] font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm',
+              onClick: () => {
+                isEditing = false;
+                repaintDetail();
+              }
+            }, '수정 취소'));
+
+            rightActions.appendChild(h('button', {
+              className: 'px-8 py-2.5 bg-indigo-600 text-white text-[14px] font-bold rounded-lg hover:bg-indigo-700 transition-colors shadow-md flex items-center gap-2',
+              onClick: async () => {
+                const saveBtn = rightActions.lastChild;
+                const originalText = saveBtn.innerHTML;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 저장 중...';
+                saveBtn.disabled = true;
+                
+                try {
+                  await api('PATCH', `/api/knowledge/${selectedId}`, editBuffer);
+                  showNotification('초안이 성공적으로 수정되었습니다.', 'success');
+                  isEditing = false;
+                  // Refresh specific entry
+                  await renderRightPane();
+                } catch (err) {
+                  showNotification('수정 실패: ' + err.message, 'error');
+                } finally {
+                  saveBtn.innerHTML = originalText;
+                  saveBtn.disabled = false;
+                }
+              }
+            }, h('i', { className: 'fas fa-save' }), '변경사항 저장'));
+          } else {
+            footer.className = 'shrink-0 px-8 py-5 bg-white border-t border-slate-200 flex items-center justify-between shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]';
+            
+            // Edit Draft Button
+            leftActions.appendChild(h('button', {
+              className: 'px-5 py-2.5 bg-slate-100 border border-slate-200 text-slate-700 text-[14px] font-bold rounded-lg hover:bg-slate-200 transition-colors shadow-sm focus:ring-2 focus:ring-slate-300 flex items-center gap-2',
+              onClick: () => {
+                isEditing = true;
+                repaintDetail();
+              }
+            }, h('i', { className: 'fas fa-pen-to-square text-indigo-500' }), '초안 수정'));
+
+            if (entry.status !== 'approved') {
+              rightActions.appendChild(h('button', {
+                className: 'px-6 py-2.5 bg-white border border-rose-200 text-rose-600 text-[14px] font-bold rounded-lg hover:bg-rose-50 hover:border-rose-300 transition-colors shadow-sm flex items-center gap-2',
+                onClick: async () => {
+                  const reason = prompt('검토 반려 사유를 입력하세요 (엔지니어에게 전달됩니다)');
+                  if (!reason) return;
+                  await api('POST', `/api/knowledge/${selectedId}/reject`, { user_id: CURRENT_USER.id, reason });
+                  showNotification('해당 초안을 성공적으로 반려했습니다', 'info');
+                  selectedId = null;
+                  await renderReviewer();
+                }
+              }, h('i', { className: 'fas fa-arrow-rotate-left' }), '초안 반려'));
+
+              rightActions.appendChild(h('button', {
+                className: `px-8 py-2.5 text-white text-[14px] font-extrabold rounded-lg shadow-md flex items-center gap-2 transition-all ${!entry.version_range ? 'bg-emerald-300 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 hover:-translate-y-0.5'}`,
+                disabled: !entry.version_range,
+                onClick: async () => {
+                  const saveBtn = rightActions.lastChild;
+                  const originalText = saveBtn.innerHTML;
+                  if (!entry.version_range) return;
+                  saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 승인 중...';
+                  saveBtn.disabled = true;
+                  try {
+                    await api('POST', `/api/knowledge/${selectedId}/approve`, { user_id: CURRENT_USER.id });
+                    showNotification('RockECHO 지식 베이스에 정식 등재 완료! 🎉', 'success');
+                    selectedId = null;
+                    await renderReviewer();
+                  } catch (err) {
+                    showNotification('에러: 승인 처리 중 문제가 발생했습니다 - ' + err.message, 'error');
+                  } finally {
+                    if (document.body.contains(saveBtn)) {
+                      saveBtn.innerHTML = originalText;
+                      saveBtn.disabled = false;
+                    }
+                  }
+                }
+              }, h('i', { className: 'fas fa-check-circle text-lg' }), '최종 승인 및 배포'));
+            }
+          }
+
+          footer.appendChild(leftActions);
+          footer.appendChild(rightActions);
+        }
+
+        // Initial Paint
+        rightPane.appendChild(contentArea);
+        rightPane.appendChild(footer);
+        repaintDetail();
+
+      } catch (err) {
+        rightPane.innerHTML = `<div class="p-8 text-rose-600 font-bold bg-rose-50 m-8 rounded-lg border border-rose-200"><i class="fas fa-triangle-exclamation mr-2 text-xl"></i> 서버 통신 중 상세 내역을 불러오지 못했습니다: <br/><span class="font-normal mt-2 block">${err.message}</span></div>`;
+      }
     }
 
-    renderTabs();
-    container.appendChild(tabsEl);
-    container.appendChild(body);
-    renderBody();
+    renderList();
+    renderRightPane();
+
+    splitLayout.appendChild(rightPane);
+    container.appendChild(splitLayout);
     main.appendChild(container);
+
   } catch (error) {
-    main.innerHTML = `<div class="p-6 text-red-500">Reviewer Dashboard를 불러오지 못했습니다: ${error.message}</div>`;
+    main.innerHTML = `<div class="p-8 text-rose-600 text-center mt-10 bg-rose-50 border border-rose-200 rounded-xl mx-8 max-w-2xl"><i class="fas fa-circle-xmark text-5xl mb-5 text-rose-400"></i><p class="font-bold text-lg">Reviewer Dashboard 로드 치명적 실패</p><p class="mt-2 text-rose-500">${error.message}</p></div>`;
   }
 }

@@ -20,7 +20,7 @@ There was an ALTER TABLE ADD COLUMN running without lock timeout. We killed the 
   "제목": "ALTER TABLE 유발 테이블 Lock 및 CPU 100% 스파이크",
   "증상": "DB CPU 100% 도달, pg_stat_activity에서 쿼리 Lock 경합 관찰됨.",
   "원인": "서비스 중 lock_timeout 설정 없이 ALTER TABLE DDL을 수행하여 과도한 배타적 잠금(Exclusive Lock) 발생. 이로 인해 후속 DML 쿼리들이 적체됨.",
-  "조치": "[즉시 조치] pg_cancel_backend() 또는 pg_terminate_backend()를 이용해 해당 ALTER TABLE 세션을 강제 종료시켜 Lock 해소.\\n[재발 방지] 운영 환경 DDL 수행 시 트랜잭션 단위로 lock_timeout = '2s' 등 설정 의무 적용.",
+  "조치": "1. pg_cancel_backend() 또는 pg_terminate_backend()를 이용해 해당 ALTER TABLE 세션을 강제 종료하여 현재 Lock 경합을 해소합니다.\\n2. 조치 후 pg_stat_activity와 대기 이벤트를 다시 확인해 적체된 세션이 정상적으로 풀렸는지 검증합니다.\\n3. 재발 방지를 위해 운영 환경 DDL 수행 시 트랜잭션 단위의 lock_timeout 설정을 의무화합니다.",
   "런북": [
     { "step": 1, "title": "Lock 트랜잭션 확인", "sql": "SELECT * FROM pg_stat_activity WHERE wait_event_type = 'Lock';" },
     { "step": 2, "title": "세션 강제 종료", "sql": "SELECT pg_terminate_backend(<pid>);" }
@@ -61,9 +61,9 @@ export function buildUserPrompt(rawInput: string, dbms: string, contextInfo = ''
     '- SQL 쿼리문이나 오류 코드를 제외한 모든 텍스트는 절대로 영어를 쓰지 말고 오직 자연스러운 한국어(Korean)로만 작성해야 합니다.',
     '- 추론과정: 가장 먼저 작성해야 하는 키입니다. 로그와 증상을 바탕으로 원인과 조치를 도출하는 논리적 사고 과정(Chain-of-Thought)을 2~3문장의 한국어로 적으세요.',
     '- 제목: 간결하고 검색하기 쉬운 요약 제목 (한국어)',
-    '- 증상: 장애 당시 발생한 객관적 사실 및 징후 (한국어)',
+    '- 증상: 엔지니어가 입력한 원본 내용에서 실제 장애 증상만 핵심적으로 요약하세요 (1~2줄 분량). 절대로 원본 데이터를 그대로 복사(Copy & Paste)하지 마십시오.',
     '- 원인: 추론과정 단계에서 도출해낸 근본 원인. (한국어 기재 필수)',
-    '- 조치: 즉각적인 조치 및 향후 재발 방지를 위한 영구적 해결 방안 지시사항. (한국어 기재 필수)',
+    '- 조치: 반드시 "1. ...\\n2. ...\\n3. ..." 형식의 번호 목록으로 작성하고, 최소 3개 항목으로 즉시 조치, 조치 후 검증, 재발 방지를 구분하세요. (한국어 기재 필수)',
     '- 런북: 조치를 위해 실행해야 할 정확한 SQL이나 시스템 명령어 묶음 (1~5개 단계)',
     '- 진단단계: 문제를 확인하기 위해 조치 전 수행할 조회성 SQL 묶음 (1~5개 단계)',
     '- 태그: 5~10개의 짧은 영문/한글 키워드 배열 (띄어쓰기 없이)',
@@ -75,6 +75,6 @@ export function buildUserPrompt(rawInput: string, dbms: string, contextInfo = ''
     rawInput,
     '------------------------',
     'CRITICAL FINAL WARNING:',
-    '결과물 JSON의 모든 Key(키)는 반드시 위에서 요청한 한글 키워드("원인", "조치" 등)로 작성해야 합니다. 또한 Value(값) 역시 원문에 영어가 많더라도 무조건 한국어로 번역해서 출력하세요.'
+    '결과물 JSON의 모든 Key(키)는 반드시 위에서 요청한 한글 키워드("원인", "조치" 등)로 작성해야 합니다. 또한 Value(값) 역시 원문에 영어가 많더라도 무조건 한국어로 번역해서 출력하세요. 특히 "조치"는 반드시 번호 목록 형식으로 작성하세요.'
   ].join('\n')
 }

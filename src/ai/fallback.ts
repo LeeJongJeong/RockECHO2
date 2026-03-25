@@ -16,9 +16,121 @@ export function getDefaultVersionRange(dbms: string): string {
   return ranges[dbms] || ''
 }
 
-function buildSymptomText(rawInput: string, type: string): string {
-  const prefix = type === 'general' ? '[Raw Input]\n' : '[Observed Symptoms]\n'
-  return `${prefix}${rawInput}`
+const SYMPTOM_HINTS = [
+  'error', 'errors', 'fail', 'failed', 'failure', 'alert', 'alarm', 'timeout', 'timed out',
+  'deadlock', 'lock', 'blocking', 'blocked', 'lag', 'oom', 'slow', 'latency', 'cpu', 'memory',
+  'disk', 'space', 'full', 'connection', 'replication', 'stuck', 'down',
+  '오류', '에러', '실패', '경고', '알림', '타임아웃', '지연', '느림', '잠금', '락', '데드락',
+  '대기', '포화', '급증', '증가', '메모리', '디스크', '공간', '끊김', '중단', '불가', '응답 없음'
+]
+
+const ACTION_HINTS = [
+  'action', 'mitigation', 'resolved', 'fixed', 'workaround', 'restart', 'restarted', 'cancel',
+  'terminate', 'killed', 'kill ', 'applied', 'changed', 'updated', 'rollback', 'vacuum',
+  'reindex', 'analyze', 'restart', 'stopped', 'started',
+  '조치', '해결', '복구', '정상화', '재시작', '재기동', '중지', '시작', '수정', '변경', '적용',
+  '롤백', '삭제', '실행', '재실행', '종료'
+]
+
+function normalizeCandidateText(text: string): string {
+  return text.replace(/\s+/g, ' ').replace(/^[\-\*\d\.\)\]:\[]+\s*/, '').trim()
+}
+
+function truncateSymptom(text: string, maxLength = 180): string {
+  if (text.length <= maxLength) {
+    return text
+  }
+
+  return `${text.slice(0, maxLength).trimEnd()}...`
+}
+
+function scoreSymptomLine(text: string): number {
+  const lower = text.toLowerCase()
+  let score = 0
+
+  if (SYMPTOM_HINTS.some((hint) => lower.includes(hint))) {
+    score += 3
+  }
+
+  if (/\d/.test(text)) {
+    score += 1
+  }
+
+  if (/[A-Z_]{2,}|pg_|innodb|redis|mongo|mysql|postgres/i.test(text)) {
+    score += 1
+  }
+
+  if (ACTION_HINTS.some((hint) => lower.includes(hint))) {
+    score -= 2
+  }
+
+  if (/^\s*(select|show|vacuum|alter|kill|start|stop|restart|reindex|analyze|redis-cli|db\.|rs\.|config\s+set|set\s+)/i.test(text)) {
+    score -= 3
+  }
+
+  return score
+}
+
+function getDefaultSymptomByType(type: string): string {
+  switch (type) {
+    case 'lock':
+      return '잠금 경합으로 인해 세션 대기 또는 응답 지연이 관찰됩니다.'
+    case 'replication':
+      return '복제 지연 또는 복제 상태 불일치 징후가 관찰됩니다.'
+    case 'vacuum':
+      return '테이블 팽창 또는 vacuum 지연으로 보이는 증상이 관찰됩니다.'
+    case 'connection':
+      return '커넥션 수 증가 또는 연결 고갈 증상이 관찰됩니다.'
+    case 'disk':
+      return '디스크 사용량 급증 또는 공간 부족 증상이 관찰됩니다.'
+    case 'memory':
+      return '메모리 압박 또는 OOM 관련 증상이 관찰됩니다.'
+    case 'slow_query':
+      return '응답 지연 또는 성능 저하 증상이 관찰됩니다.'
+    case 'crash':
+      return '비정상 종료 또는 재시작 관련 증상이 관찰됩니다.'
+    case 'archive':
+      return '백업 또는 아카이브 실패 증상이 관찰됩니다.'
+    case 'upgrade':
+      return '업그레이드 또는 마이그레이션 과정의 이상 징후가 관찰됩니다.'
+    case 'corruption':
+      return '데이터 또는 인덱스 손상 가능성이 있는 증상이 관찰됩니다.'
+    case 'auth':
+      return '인증 또는 권한 관련 실패 증상이 관찰됩니다.'
+    case 'high_cpu':
+      return 'CPU 사용률 급증과 관련된 증상이 관찰됩니다.'
+    case 'config':
+      return '설정 오류로 보이는 증상이 관찰됩니다.'
+    default:
+      return '장애 징후가 관찰되어 추가 확인이 필요합니다.'
+  }
+}
+
+export function summarizeSymptomText(rawInput: string, type = 'general'): string {
+  const candidates = rawInput
+    .split(/\r?\n+/)
+    .flatMap((line) => line.split(/(?<=[.!?])\s+|;\s+/))
+    .map((text, index) => ({ index, text: normalizeCandidateText(text) }))
+    .filter((item) => item.text.length >= 8)
+    .map((item) => ({ ...item, score: scoreSymptomLine(item.text) }))
+
+  const selected = candidates
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, 2)
+    .sort((a, b) => a.index - b.index)
+    .map((item) => truncateSymptom(item.text))
+
+  if (selected.length > 0) {
+    return selected.join('\n')
+  }
+
+  const fallbackCandidate = candidates.find((item) => item.score > -2)
+  if (fallbackCandidate) {
+    return truncateSymptom(fallbackCandidate.text)
+  }
+
+  return getDefaultSymptomByType(type)
 }
 
 function getCheckSql(dbms: string, lower: string): string {
@@ -178,7 +290,7 @@ export function generateFallback(rawInput: string, dbms: string): Partial<Knowle
 
   return {
     title: `${dbms.toUpperCase()} ${pattern.titleSuffix}`,
-    symptom: buildSymptomText(rawInput, pattern.type),
+    symptom: summarizeSymptomText(rawInput, pattern.type),
     cause: pattern.cause,
     action: pattern.action,
     runbook: buildFallbackRunbook(dbms, pattern.type, lower),

@@ -145,9 +145,13 @@ export async function updateKnowledgeFields(
   const updated = await getKnowledgeEntryById(db, id)
   
   if (body.status === 'approved' && env.OPENAI_API_KEY && updated) {
-    const textToEmbed = `Title: ${updated.title}\nSymptom: ${updated.symptom}\nCause: ${updated.cause}\nAction: ${updated.action}`
-    const embedding = await generateEmbedding(env.OPENAI_API_KEY, env.OPENAI_BASE_URL || 'https://api.openai.com/v1', textToEmbed, embeddingModel)
-    await env.VECTOR_DB.upsert([{ id, values: embedding, metadata: { dbms: String(updated.dbms || 'unknown') } }])
+    try {
+      const textToEmbed = `Title: ${updated.title}\nSymptom: ${updated.symptom}\nCause: ${updated.cause}\nAction: ${updated.action}`
+      const embedding = await generateEmbedding(env.OPENAI_API_KEY, env.OPENAI_BASE_URL || 'https://api.openai.com/v1', textToEmbed, embeddingModel)
+      await env.VECTOR_DB.upsert([{ id, values: embedding, metadata: { dbms: String(updated.dbms || 'unknown') } }])
+    } catch (err) {
+      console.warn('Vectorization failed during update (DB saved successfully):', err)
+    }
   }
 
   return updated ? parseKnowledgeJsonFields(updated as Record<string, unknown>) : null
@@ -189,9 +193,13 @@ export async function approveKnowledgeEntry(
 
   const fullEntry = await getKnowledgeEntryById(db, id)
   if (env.OPENAI_API_KEY && fullEntry) {
-    const textToEmbed = `Title: ${fullEntry.title}\nSymptom: ${fullEntry.symptom}\nCause: ${fullEntry.cause}\nAction: ${fullEntry.action}`
-    const embedding = await generateEmbedding(env.OPENAI_API_KEY, env.OPENAI_BASE_URL || 'https://api.openai.com/v1', textToEmbed, embeddingModel)
-    await env.VECTOR_DB.upsert([{ id, values: embedding, metadata: { dbms: String(fullEntry.dbms || 'unknown') } }])
+    try {
+      const textToEmbed = `Title: ${fullEntry.title}\nSymptom: ${fullEntry.symptom}\nCause: ${fullEntry.cause}\nAction: ${fullEntry.action}`
+      const embedding = await generateEmbedding(env.OPENAI_API_KEY, env.OPENAI_BASE_URL || 'https://api.openai.com/v1', textToEmbed, embeddingModel)
+      await env.VECTOR_DB.upsert([{ id, values: embedding, metadata: { dbms: String(fullEntry.dbms || 'unknown') } }])
+    } catch (err) {
+      console.warn('Vectorization failed during approval (DB saved successfully):', err)
+    }
   }
 
   return { success: true, status: 'approved' }
@@ -287,9 +295,13 @@ export async function bulkApproveKnowledgeEntries(
 
     const fullEntry = await getKnowledgeEntryById(db, id)
     if (env.OPENAI_API_KEY && fullEntry) {
-      const textToEmbed = `Title: ${fullEntry.title}\nSymptom: ${fullEntry.symptom}\nCause: ${fullEntry.cause}\nAction: ${fullEntry.action}`
-      const embedding = await generateEmbedding(env.OPENAI_API_KEY, env.OPENAI_BASE_URL || 'https://api.openai.com/v1', textToEmbed, embeddingModel)
-      await env.VECTOR_DB.upsert([{ id, values: embedding, metadata: { dbms: String(fullEntry.dbms || 'unknown') } }])
+      try {
+        const textToEmbed = `Title: ${fullEntry.title}\nSymptom: ${fullEntry.symptom}\nCause: ${fullEntry.cause}\nAction: ${fullEntry.action}`
+        const embedding = await generateEmbedding(env.OPENAI_API_KEY, env.OPENAI_BASE_URL || 'https://api.openai.com/v1', textToEmbed, embeddingModel)
+        await env.VECTOR_DB.upsert([{ id, values: embedding, metadata: { dbms: String(fullEntry.dbms || 'unknown') } }])
+      } catch (err) {
+        console.warn('Vectorization failed during bulk approval (DB saved successfully):', err)
+      }
     }
 
     results.push({ id, success: true })

@@ -64,7 +64,6 @@ export function renderSidebar(onUserChange) {
     h('div', { className: 'mt-3' },
       h('select', {
         className: 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 outline-none focus:border-indigo-400',
-        value: CURRENT_USER.role,
         onChange: (event) => {
           const roles = { engineer: 'user-004', senior_engineer: 'user-002', reviewer: 'user-003', admin: 'user-001' };
           const names = { engineer: 'Engineer Park', senior_engineer: 'Senior DBA Kim', reviewer: 'Reviewer Lee', admin: 'Admin' };
@@ -72,14 +71,13 @@ export function renderSidebar(onUserChange) {
           CURRENT_USER.name = names[event.target.value] || 'Engineer Park';
           CURRENT_USER.role = event.target.value;
           onUserChange();
-        },
-        innerHTML: `
-          <option value="engineer">Engineer</option>
-          <option value="senior_engineer">Senior Engineer</option>
-          <option value="reviewer">Reviewer</option>
-          <option value="admin">Admin</option>
-        `
-      })
+        }
+      },
+        h('option', CURRENT_USER.role === 'engineer' ? { value: 'engineer', selected: true } : { value: 'engineer' }, 'Engineer'),
+        h('option', CURRENT_USER.role === 'senior_engineer' ? { value: 'senior_engineer', selected: true } : { value: 'senior_engineer' }, 'Senior Engineer'),
+        h('option', CURRENT_USER.role === 'reviewer' ? { value: 'reviewer', selected: true } : { value: 'reviewer' }, 'Reviewer'),
+        h('option', CURRENT_USER.role === 'admin' ? { value: 'admin', selected: true } : { value: 'admin' }, 'Admin')
+      )
     )
   ));
 

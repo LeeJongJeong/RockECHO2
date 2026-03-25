@@ -203,6 +203,12 @@ export function renderQuickInput(prefill = '') {
       h('p', { className: 'text-xs text-gray-400 mt-1' }, `${incidentData.incident_number || '-'} · AI 품질 ${Math.round((knowledgeEntry.ai_quality_score || 0.6) * 100)}%`)
     ));
 
+    // Read-only Raw Input for reference
+    card.appendChild(h('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, '엔지니어 원본 (Raw Input) - 참고용'));
+    const rawInputDisplay = h('textarea', { className: 'input-field mb-5 bg-gray-50 text-gray-500 cursor-not-allowed', rows: '4', readOnly: true });
+    rawInputDisplay.value = incidentData.raw_input || '';
+    card.appendChild(rawInputDisplay);
+
     const fields = [
       ['title', '제목', 'input'],
       ['symptom', '증상', 'textarea'],
@@ -213,9 +219,10 @@ export function renderQuickInput(prefill = '') {
 
     fields.forEach(([key, label, type]) => {
       card.appendChild(h('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, label));
+      const textareaRows = key === 'action' ? '7' : '4';
       const element = type === 'input'
         ? h('input', { type: 'text', className: 'input-field mb-4', value: knowledgeEntry[key] || '' })
-        : h('textarea', { className: 'input-field mb-4', rows: '4' });
+        : h('textarea', { className: 'input-field mb-4', rows: textareaRows });
       if (type === 'textarea') {
         element.value = knowledgeEntry[key] || '';
       }

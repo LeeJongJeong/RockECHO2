@@ -31,8 +31,19 @@ aiRoutes.post('/generate', async (c) => {
     }
 
     const overrideEnv = { ...c.env }
-    if (c.req.header('X-AI-Base-Url')) overrideEnv.OPENAI_BASE_URL = c.req.header('X-AI-Base-Url')
-    if (c.req.header('X-AI-Api-Key')) overrideEnv.OPENAI_API_KEY = c.req.header('X-AI-Api-Key')
+    const aiMode = c.req.header('X-AI-Mode') || 'openai'
+    const requestedBaseUrl = c.req.header('X-AI-Base-Url')?.trim() || ''
+    const requestedApiKey = c.req.header('X-AI-Api-Key')?.trim() || ''
+
+    if (requestedBaseUrl) {
+      overrideEnv.OPENAI_BASE_URL = requestedBaseUrl
+    }
+
+    if (requestedApiKey) {
+      overrideEnv.OPENAI_API_KEY = requestedApiKey
+    } else if (aiMode === 'local' && requestedBaseUrl) {
+      overrideEnv.OPENAI_API_KEY = 'ollama-dummy-key'
+    }
 
     const aiModel = c.req.header('X-AI-Model') || ''
     const embeddingModel = c.req.header('X-Embedding-Model') || ''

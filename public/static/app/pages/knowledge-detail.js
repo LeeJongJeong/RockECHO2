@@ -108,6 +108,10 @@ export async function renderKnowledgeDetail(id, searchEventId, index, total) {
     }
     left.appendChild(header);
 
+    if (entry.raw_input) {
+      left.appendChild(sectionCard('Raw Input (엔지니어 원본)', entry.raw_input, { maxHeight: '150px' }));
+    }
+
     left.appendChild(sectionCard('Symptom', entry.symptom || '-', { maxHeight: '220px' }));
     left.appendChild(sectionCard('Cause', entry.cause || '-', { maxHeight: '220px' }));
     left.appendChild(sectionCard('Action', entry.action || '-', { maxHeight: '220px' }));
